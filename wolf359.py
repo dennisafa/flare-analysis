@@ -15,7 +15,7 @@ def grad_neg_ln_like(p):
     return -gp.grad_log_likelihood(y)
 
 wolf = KeplerLightCurveFile.from_archive(201885041)
-wolfPDC = wolf.PDCSAP_FLUX.remove_nans().remove_outliers()
+wolfPDC = wolf.PDCSAP_FLUX.remove_nans()
 
 y = wolfPDC.flux[:300]
 x = wolfPDC.time[:300]
