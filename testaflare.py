@@ -1,6 +1,6 @@
-from appaloosa import aflare as ap
+import aflare as ap
 from lightkurve import KeplerTargetPixelFile
-import matplotlib.pyplot as pl
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 
@@ -39,60 +39,79 @@ def findFluxTime(peakFlux, flux, time):
         i += 1
 
 def getModel(p, data):
-    time, y = data
-    peakTime, fwhm, peakFlare = p
-    model = ap.aflare1(time, tpeak=peakTime, fwhm=fwhm, ampl=peakFlare, upsample=True, uptime=10)
+    time, y, nflares = data
+    p = np.exp(p)
+    model = np.zeros_like([time])
+    p = p.reshape(3,nflares)
+    for flare in range(nflares):
+        model += ap.aflare1(time, tpeak=p[0,flare], fwhm=p[1,flare] , ampl=p[2,flare],
+                            upsample=True, uptime=10)
     return model
 
 def ng_ln_like (p, data):
-    time, y = data
-    peakTime, fwhm, peakFlare = p
-    model = ap.aflare1(time, tpeak=peakTime, fwhm=fwhm , ampl=peakFlare, upsample=True, uptime=10)
+    _, y, _ = data
+    model = getModel(p, data)
     return np.sum((model - y) ** 2)
+
 
 class strPlot:
 
-    global peakTime
-    global peakFlare
-    global time
-    global flux
-    global fwhm
-    global plot
-
-    def __init__(self, str, range1, range2, flarenum):
-        sap = str.remove_nans()
+    def __init__(self, star, range1, range2):
+        sap = star.remove_nans()
         self.flux = sap.flux[range1:range2]
         self.time = sap.time[range1:range2]
         self.flux = (self.flux/np.median(self.flux)) - 1
 
 
-    def peaks(self):
+    def guesspeaks(self):
         multiFlares = multiFlaresList(self.flux)
-        print(multiFlares)
+        # print(multiFlares)
         model = 0
-        for flareVal in multiFlares:
+        self.nflares = np.shape(multiFlares)[0]
+        params = np.zeros([3, self.nflares])
+        for i, flareVal in enumerate(multiFlares):
             self.peakFlare = flareVal
             self.peakTime = findFluxTime(self.peakFlare, self.flux, self.time)
             p = [self.peakTime, 0.004, self.peakFlare]
-            data = [self.time, self.flux]
-            model += getModel(p, data)
+            params[:, i] = p
+        return np.log(params)
+            # data = [self.time, self.flux]
+            # model += getModel(p, data)
 
-        print(model)
+#         print(model)
 
-        pl.plot(self.time, model)
-        pl.plot(self.time, self.flux)
-        pl.show()
+#         plt.plot(self.time, model)
+#         plt.plot(self.time, self.flux)
+#         plt.show()
 
-    def minimize(self):
-        p = [self.peakTime, 0.004, self.peakFlare]
-        result = minimize(ng_ln_like, p, args=[self.time, self.flux])
-        self.peakTime, self.peakFlare  = result.x
-        return result
+    def fit(self, p):
+        result = minimize(ng_ln_like, p, args=[self.time, self.flux, self.nflares], method='Powell')
+        # self.peakTime, self.peakFlare  = result.x
+        return result.x
 
 
-w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
-lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
-y = lc359.flux
-x = lc359.time
-flare1 = strPlot(lc359, 700, 850, 0)
-flare1.peaks()
+# w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
+# lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
+# y = lc359.flux
+# x = lc359.time
+# flare1 = strPlot(lc359, 700, 850, 0)
+# guessparams = flare1.guesspeaks()
+
+# fitparams = flare1.fit(guessparams)
+
+
+# def f(p, t, y):
+#     p = np.exp(p)
+#     flarePeak1, peakTime1, fwhm1, flarePeak2, peakTime2, fwhm2 = p
+#     model1 = aflare.aflare1(t, tpeak=peakTime1, fwhm=fwhm1, ampl=flarePeak1)
+#     model2 = aflare.aflare1(t, tpeak=peakTime2, fwhm=fwhm2, ampl=flarePeak2)
+#     model = model1 + model2
+#     return np.sum((y-model)**2)
+
+# def get_model(p, t, y):
+#     p = np.exp(p)
+#     flarePeak1, peakTime1, fwhm1, flarePeak2, peakTime2, fwhm2 = p
+#     model1 = aflare.aflare1(t, tpeak=peakTime1, fwhm=fwhm1, ampl=flarePeak1)
+#     model2 = aflare.aflare1(t, tpeak=peakTime2, fwhm=fwhm2, ampl=flarePeak2)
+#     model = model1 + model2
+#     return model
