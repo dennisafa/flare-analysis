@@ -3,6 +3,7 @@ from lightkurve import KeplerTargetPixelFile
 import matplotlib.pyplot as pl
 import numpy as np
 import wolf359.flaredetect as fd
+import scipy as scipy
 from scipy.optimize import minimize
 
 
@@ -38,6 +39,7 @@ class strPlot:
         self.flux = sap.flux[range1:range2]
         self.time = sap.time[range1:range2]
         self.flux = (self.flux/np.median(self.flux)) - 1
+        self.flux = [number / scipy.std(self.flux) for number in self.flux]
 
 
     def guesspeaks(self):
@@ -61,7 +63,7 @@ w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
 lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
 y = lc359.flux
 x = lc359.time
-flare1 = strPlot(lc359, 760, 1000)
+flare1 = strPlot(lc359, 1800, 2200)
 
 guessparams = flare1.guesspeaks() # getting the model parameters
 

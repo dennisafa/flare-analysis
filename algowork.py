@@ -59,8 +59,8 @@ x = lc359.time
 y = (y/np.median(y)) - 1
 y = [number/scipy.std(y) for number in y]
 
-print(flaredetect(y[415:600]))
+print(flaredetect(y))
 
 
-pl.plot(x[415:600],y[415:600])
+pl.plot(x, y)
 pl.show()
