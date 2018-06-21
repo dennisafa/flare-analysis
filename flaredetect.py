@@ -1,10 +1,9 @@
 import numpy as np
-def flaredetect(flux):
+def flaredetect(flux, sliceNum):
     j = 0
     listFlare = []
-    baseval = np.abs(np.average(flux) * 1.15)
+    baseval = np.abs(np.average(flux) * 1.25)
     noise = noisecalc(flux)
-    print(baseval)
     while j < len(flux)-1:
         if flux[j] > baseval:
             peak = flux[j]
@@ -23,12 +22,13 @@ def flaredetect(flux):
                 j += 1
         else:
             j += 1
+    print('Flare detect successful, number of flares: ' + str(len(listFlare)) + ' at slice number ' + str(sliceNum))
     return listFlare
 
 def noisecalc (flux):
     j = 0
     jumps = []
-    baseval = np.abs(np.average(flux) * 1.15)
+    baseval = np.abs(np.average(flux) * 1.25)
     while j < len(flux) - 1:
         if flux[j] < baseval:
             firstval = flux[j]
@@ -44,5 +44,6 @@ def noisecalc (flux):
                 j+=1
         else:
             j+=1
+    print('Noise calc successful, average variation: ' + str(np.average(jumps)))
     return np.average(jumps)
 
