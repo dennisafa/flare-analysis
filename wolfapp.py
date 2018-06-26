@@ -14,6 +14,7 @@ from george import kernels
 class strPlot:
 
     def neg_ln_like(self, p):
+        '''return'''
         self.gp.set_parameter_vector(p)
         return -self.gp.log_likelihood(self.flux)
 
