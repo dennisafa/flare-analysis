@@ -89,7 +89,7 @@ class strPlot:
 
     def computegeorge (self):
         kernel = np.var(self.flux) * kernels.ExpSquaredKernel(0.5) * kernels.ExpSine2Kernel(log_period = 0.5, gamma=1)
-        self.gp = george.GP(kernel) # test test2
+        self.gp = george.GP(kernel) # testing
         self.gp.compute(self.time, self.flux)
         result = minimize(self.neg_ln_like, self.gp.get_parameter_vector(), jac=self.grad_neg_ln_like)
         self.gp.set_parameter_vector(result.x)
