@@ -88,7 +88,8 @@ class strPlot:
         return bounds
 
     def computegeorge (self):
-        kernel = np.var(self.flux) * kernels.ExpSquaredKernel(0.5) * kernels.ExpSine2Kernel(log_period = 0.5, gamma=1)
+        #kernel = np.var(self.flux) * kernels.ExpSquaredKernel(0.5) * kernels.ExpSine2Kernel(log_period = 0.5, gamma=1)
+        kernel = np.var(self.flux) * kernels.ExpKernel(ndim=1, metric=1)
         self.gp = george.GP(kernel)
         self.gp.compute(self.time, self.flux)
         result = minimize(self.neg_ln_like, self.gp.get_parameter_vector(), jac=self.grad_neg_ln_like)
@@ -114,7 +115,7 @@ def run():
     length = len(fluxwolf)
     while i < length - range:
         flare = strPlot(lc359, i, i + range)
-        #georgemodel = flare.computegeorge()
+        georgemodel = flare.computegeorge()
         #print(georgemodel)
         guessparams = flare.guesspeaks(x)
         bounds = flare.setbounds(guessparams)
@@ -122,7 +123,7 @@ def run():
             i += range
             continue
         fitparams = flare.fit(guessparams, bounds)
-        model = flare.getModel(fitparams, [flare.time, flare.flux, flare.nflares])
+        model = flare.getModel(fitparams, [flare.time, flare.flux, flare.nflares]) + georgemodel
         for it, flux in enumerate(flare.detflares):
             pl.plot(flare.params[it, 0], flux, marker='x', markersize=4, color="black")
         pl.plot(flare.time, model.flatten(), '--r')
