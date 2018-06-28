@@ -96,7 +96,7 @@ class strPlot:
 
 
 
-def call():
+def run():
     w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
     lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
     steps = 100
