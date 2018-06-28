@@ -56,8 +56,8 @@ class strPlot:
         self.flux = self.flux[np.isfinite(self.flux)]
 
 
-    def guesspeaks(self, sliceNum): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
-        self.detflares = fd.flaredetect(self.flux, sliceNum)
+    def guesspeaks(self): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
+        self.detflares = fd.flaredetect(self.flux)
         self.nflares = np.shape(self.detflares)[0]
         self.params = np.zeros([self.nflares, 3])
         for i, flareVal in enumerate(self.detflares):
@@ -95,39 +95,14 @@ class strPlot:
 
 
 
-def load():
+
+def call():
     w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
     lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
-    
-def call(lc359, flux):
-    # wolf359: 201885041
-    # josh's star: 201205469
-    # ran: 206208968
-    w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
-    lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
-    track = 0
     steps = 100
-    length = 1000
-    for slice in range(0, 100, steps):
-
+    for slice in range(0, len(lc359.flux), steps):
         flare = strPlot(lc359, slice, slice + steps)
-        guessparams = flare.guesspeaks(track)
-        notempty = checkzero(flare.detflares)
-        if notempty:
-            georgemodel = flare.computegeorge()
-            bounds = flare.setbounds(guessparams)
-
-            fitparams = flare.fit(guessparams, bounds)
-            model = flare.getmodel(fitparams, [flare.time, flare.flux, flare.nflares]) + georgemodel
-            plotflares(flare, model, track)
-
-            slice += steps
-            track += 1
-            print("Success at range {}".format(slice))
-        else:
-            print("No flares in slice {}".format(slice))
-            slice+=steps
-            track+=1
+        plotflares(flare)
 
 def checkzero(l):
     if len(l) == 0:
@@ -135,37 +110,51 @@ def checkzero(l):
     else:
         return True
 
-def plotflares(flare, model, track):
-    for it, flux in enumerate(flare.detflares):
-        pl.plot(flare.params[it, 0], flux, marker='x', markersize=4, color="black")
+def plotflares(flare):
+
+    flareorig = flare.flux
+    finalmodel = 0
+    count = 0
+    list_plots = []
+    while len(fd.flaredetect(flare.flux)) > 0:
+        tempmodel = loopcomp(flare)
+        finalmodel += tempmodel
+
+        # figplot.plot(flare.time, (flare.flux-tempmodel.flatten()), color = 'Black', linestyle= '--', label = 'Flares subtracted')
+        # figplot.plot(flare.time, flare.flux, color = 'Red', label = 'Original')
+        # figplot.legend(loc = 'upper left')
+        # figplot.xlabel('Time - BJD')
+        # figplot.ylabel('Flux - Normalized 0')
+        # list_plots.append(figplot)
+        # figplot.clf()
+
+        flare.flux = flare.flux-tempmodel.flatten()
+        count+=1
+
+    # figplotmodel = pl
+    # figplotmodel.plot(flare.time, flare.flux, color = 'Black', linestyle = '--', label ='Flares subtracted')
+    # figplotmodel.plot(flare.time, finalmodel.flatten(), color = 'Blue', label = 'Flare model')
+    # figplotmodel.legend(loc = 'upper left')
+    # figplotmodel.xlabel('Time - BJD')
+    # figplotmodel.ylabel('Flux - Normalized 0')
+    # figplotmodel.clf()
+
+    if finalmodel is not 0:
+        finalplot = pl
+        finalplot.plot(flare.time, flareorig, color = 'Red', label = 'Original flux')
+        finalplot.plot(flare.time, finalmodel.flatten(), color = 'Black', linestyle= '--', label = 'Final model')
+        finalplot.show()
 
 
-    pl.plot(flare.time, model.flatten(), '--r')
-    pl.plot(flare.time, flare.flux, color='Grey', lw=0.5)
-    pl.xlabel('Time - BYJD')
-    pl.ylabel('Flux - Normalized to 0')
-    pl.show()
-    pl.clf()
 
-    while flare.guesspeaks(track, model.flatten())
-    pl.plot(flare.time, (flare.flux-model.flatten()), color = 'Black', label = 'Subtracted flares')
-    pl.plot(flare.time, flare.flux, color = 'Grey', linestyle = '--', label = 'Original')
-    pl.legend(loc = 'upper-left')
-    pl.xlabel('Time - BYJD')
-    pl.ylabel('Flux - Normalized to 0')
-    pl.show()
+def loopcomp(flare):
+    guessparams = flare.guesspeaks()
+    notempty = checkzero(flare.detflares)
+    if notempty:
+        #georgemodel = flare.computegeorge()
+        bounds = flare.setbounds(guessparams)
 
+        fitparams = flare.fit(guessparams, bounds)
+        model = flare.getmodel(fitparams, [flare.time, flare.flux, flare.nflares])
 
-    savepath = os.path.join('/Users/Dennis/Desktop/plotswolf/test', 'wolf' + str(track) + '.png')
-    pl.savefig(savepath)
-    pl.clf()
-
-def cleandata(star, range1, range2):
-    sap =  star.remove_outliers()
-    flux = sap.flux[range1:range2]
-    time = sap.time[range1:range2]
-    flux = (flux / np.median(flux)) - 1
-    flux = [number / scipy.std(flux) for number in flux]
-    time = time[np.isfinite(flux)]
-    flux = asarray(flux)
-    flux = flux[np.isfinite(flux)]
+        return model
