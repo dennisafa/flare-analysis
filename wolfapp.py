@@ -5,8 +5,6 @@ import numpy as np
 import wolf359.flaredetect as fd
 import scipy as scipy
 from scipy.optimize import minimize
-import time
-import os
 from numpy import asarray
 import george
 from george import kernels
@@ -72,16 +70,20 @@ class strPlot:
         result = minimize(self.ng_ln_like, p, args=[self.time, self.flux, self.nflares], method='L-BFGS-B', bounds=bounds)
         return result.x
 
+    def min(self):
+        result = minimize(self.ng_ln_like, np.log(self.params), args=[self.time, self.flux, self.nflares], method='L-BFGS-B', bounds=self.bounds)
+        return result.x
+
     def setbounds (self, p):
         p = asarray(p).ravel()
         bounds = np.zeros([len(p), 2])
-        k = 0
         for i in range(len(p)):
             for j in range(2):
                 if j < 1:
                     bounds[i][j] = p[i]
                 else:
                     bounds[i][j] = p[i] + p[i] ** 1/6
+        self.bounds = bounds
         return bounds
 
     def computegeorge (self):
@@ -99,8 +101,8 @@ class strPlot:
 def run():
     w359 = KeplerTargetPixelFile.from_archive(201885041, cadence='short')
     lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
-    steps = 100
-    for slice in range(0, len(lc359.flux), steps):
+    steps = 300
+    for slice in range(0, 3000, steps):
         flare = strPlot(lc359, slice, slice + steps)
         plotflares(flare)
 
@@ -110,23 +112,24 @@ def checkzero(l):
     else:
         return True
 
-def plotflares(flare):
+def plotflares(flare): # run the flux list through the modeling process, then subtract models from original flux
 
     flareorig = flare.flux
     finalmodel = 0
     count = 0
-    list_plots = []
-    while len(fd.flaredetect(flare.flux)) > 0:
+    while len(fd.flaredetect(flare.flux)) > 0: # while flares are still being detected, compute its model and plot
         tempmodel = loopcomp(flare)
         finalmodel += tempmodel
 
+        # figplot = pl
         # figplot.plot(flare.time, (flare.flux-tempmodel.flatten()), color = 'Black', linestyle= '--', label = 'Flares subtracted')
         # figplot.plot(flare.time, flare.flux, color = 'Red', label = 'Original')
         # figplot.legend(loc = 'upper left')
         # figplot.xlabel('Time - BJD')
         # figplot.ylabel('Flux - Normalized 0')
         # list_plots.append(figplot)
-        # figplot.clf()
+        # figplot.show()
+        # #figplot.clf()
 
         flare.flux = flare.flux-tempmodel.flatten()
         count+=1
@@ -139,22 +142,23 @@ def plotflares(flare):
     # figplotmodel.ylabel('Flux - Normalized 0')
     # figplotmodel.clf()
 
-    if finalmodel is not 0:
+
+    if finalmodel is not 0: # if the model was computed then plot
         finalplot = pl
-        finalplot.plot(flare.time, flareorig, color = 'Red', label = 'Original flux')
+        finalplot.plot(flare.time, flareorig, color = 'Blue', label = 'Original flux')
         finalplot.plot(flare.time, finalmodel.flatten(), color = 'Black', linestyle= '--', label = 'Final model')
         finalplot.show()
 
 
 
 def loopcomp(flare):
-    guessparams = flare.guesspeaks()
-    notempty = checkzero(flare.detflares)
+    guessparams = flare.guesspeaks() # returns the parameters of where and when each flare occured
+    notempty = checkzero(flare.detflares) # checks for flares to exit in the data set before modeling
     if notempty:
         #georgemodel = flare.computegeorge()
-        bounds = flare.setbounds(guessparams)
+        bounds = flare.setbounds(guessparams) # set the bounds for each parameter
 
-        fitparams = flare.fit(guessparams, bounds)
-        model = flare.getmodel(fitparams, [flare.time, flare.flux, flare.nflares])
+        fitparams = flare.fit(guessparams, bounds) # fit the parameters with a minimization process
+        model = flare.getmodel(fitparams, [flare.time, flare.flux, flare.nflares]) # model the flares using appaloosa's aflare
 
         return model
