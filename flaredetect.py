@@ -13,7 +13,7 @@ def flaredetect(flux, slicenum=0):
                     peak = flux[j + 1]
                     j += 1
                 else:
-                    if peak - firstval > noise:
+                    if peak - firstval > noise * 1.4:
                         listFlare.append(peak)
                     j+=1
             else:

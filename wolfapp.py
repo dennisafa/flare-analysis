@@ -100,19 +100,6 @@ class strPlot:
         return pred_mean
 
 
-
-
-def run():
-    # stars to test george on: 206208968
-
-    w359 = KeplerTargetPixelFile.from_archive(201885041)
-    lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
-    steps, iters = 300, 2000
-    for slice in range(0, iters, steps):
-        flare = strPlot(lc359, slice, slice + steps)
-        sub_flares(flare)
-        #make_george(flare)
-
 def checkzero(l):
     if len(l) == 0:
         return False
@@ -143,24 +130,6 @@ def plotflares(flare): # run the flux list through the modeling process, then su
         flare.flux = flare.flux-tempmodel.flatten()
         count+=1
 
-    # multi_model = pl
-    # pl.plot(flare.time, flareorig, color="Grey")
-    # #pl.show()
-    # pl.clf()
-    # for model in model_list:
-    #     multi_model.plot(flare.time, model.flatten(), color='Black')
-    # multi_model.show()
-
-
-    # figplotmodel = pl
-    # figplotmodel.plot(flare.time, flare.flux, color = 'Black', linestyle = '--', label ='Flares subtracted')
-    # figplotmodel.plot(flare.time, finalmodel.flatten(), color = 'Blue', label = 'Flare model')
-    # figplotmodel.legend(loc = 'upper left')
-    # figplotmodel.xlabel('Time - BJD')
-    # figplotmodel.ylabel('Flux - Normalized 0')
-    # figplotmodel.clf()
-
-
     if finalmodel is not 0: # if the model was computed then plot
         finalplot = pl
         finalplot.plot(flare.time, flareorig, color = 'Blue', label = 'Original flux')
@@ -184,19 +153,18 @@ def get_model(flare):
         return model
 
 
-def make_period_fit(flare):
+def make_period_fit(time, flux):
+    global periodcleanclean
 
-    period = sf(flare.flux, 51, 3)
+    period = sf(flux, 51, 3)
     periodclean = sf(period, 51, 3)
     periodcleanclean = sf(periodclean, 51, 3) # lol
 
-    dx = np.diff(flare.time) / np.diff(periodcleanclean)
+    dx = np.diff(time) / np.diff(periodcleanclean)
     period_change = sign_change(dx)
-    print(period_change)
-    print("Rotational period: " + str(flare.time[period_change[1]] - flare.time[period_change[0]]))
-    return periodcleanclean
+    return period_change
 
-def sign_change(model): # returns index where the first derivative changes sign from positive to negative
+def sign_change(model): # returns indices where the first derivative changes sign from positive to negative
     change_sign = []
     j = 0
     while j < len(model)-1:
@@ -210,15 +178,24 @@ def sign_change(model): # returns index where the first derivative changes sign 
     return change_sign
 
 
-def sub_flares(flare):
+def sub_flares(flare, period, phase, range1, range2): # loops through a subset of flux values, detects flares, then subtracts and performs again
+    global flare_orig
     flare_orig = flare.flux
+    finalmodel = 0
     while len(fd.flaredetect(flare.flux)) > 0: # while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
+        finalmodel += tempmodel
         flare.flux = flare.flux-tempmodel.flatten()
-    period = make_period_fit(flare) # then model this subtracted flare flux set
-    pl.plot(flare.time, flare_orig)
-    pl.plot(flare.time, period)
+
+    pl.plot(flare.time, flare_orig,color = 'Blue', label = 'Original flux')
+    pl.plot(flare.time, period[range1:range2], color='Grey', label = 'Period model')
+    pl.plot(flare.time, finalmodel.flatten() + period[range1:range2],color = "Black", linestyle= '--', label = 'Flare model')
+    pl.legend(loc='upper left')
+    pl.xlabel('Time - BJD')
+    pl.ylabel('Flux - Normalized 0')
     pl.show()
+    print ("Number of flares in rotational period {}", format(len(fd.flaredetect(finalmodel.flatten()))))
+
 
 def sub_flare_model(flare):
     guessparams = flare.guesspeaks()  # returns the parameters of where and when each flare occured
@@ -231,3 +208,18 @@ def sub_flare_model(flare):
                                            flare.nflares])
 
         return model
+
+
+def run():
+    # stars to test george on: 206208968
+
+    w359 = KeplerTargetPixelFile.from_archive(201885041)
+    lc359 = w359.to_lightcurve(aperture_mask=w359.pipeline_mask)
+    period_flare = strPlot(lc359, 0, len(lc359.flux))
+    period = make_period_fit(period_flare.time, period_flare.flux) # calculate the rotational modulation
+
+    for i, n in enumerate(period):
+        flare = strPlot(lc359, period[i], period[i+1])
+        sub_flares(flare, periodcleanclean, i, period[i], period[i+1])
+
+
