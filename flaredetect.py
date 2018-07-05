@@ -22,7 +22,7 @@ def flaredetect(flux, slicenum=0):
                 j += 1
         else:
             j += 1
-    print('Flare detect successful, number of flares: ' + str(len(listFlare)) + ' at slice number ' + str(slicenum))
+    #print('Flare detect successful, number of flares: ' + str(len(listFlare)) + ' at slice number ' + str(slicenum))
     return listFlare
 
 def noisecalc (flux):

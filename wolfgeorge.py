@@ -28,7 +28,7 @@ y = y[np.isfinite(y)]
 
 def computeModel():
     global gp
-    kernel = np.var(y) *  kernels.Matern52Kernel(metric=0.5) * kernels.CosineKernel(log_period=0.5)
+    kernel = np.var(y) *  kernels.Matern52Kernel(metric=0.5) * kernels.CosineKernel(log_period=2)
     gp = george.GP(kernel)
     gp.compute(x,y)
     #pred = gp.predict(y, x, return_var=True)
