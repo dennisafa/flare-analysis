@@ -207,15 +207,6 @@ def run():
                     sub_flares(flare, george_model, i, period[i], period[i+1])
 
 
-
-
-
-
-
-    print("Average number of flares = {} for period = {}".format(np.average(flare_count), avgperiod))
-
-
-
 def isdirtest():
     boolisTrue = os.path.isdir("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits")
     print(boolisTrue)
