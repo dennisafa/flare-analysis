@@ -1,5 +1,6 @@
 import numpy as np
 def flaredetect(flux, slicenum=0):
+    global listFlare
     j = 0
     listFlare = []
     baseval = np.abs(np.average(flux) * 1.9)
@@ -13,7 +14,7 @@ def flaredetect(flux, slicenum=0):
                     peak = flux[j + 1]
                     j += 1
                 else:
-                    if peak - firstval > noise * 1.4:
+                    if peak - firstval > noise * 2:
                         listFlare.append(peak)
                     j+=1
             else:
@@ -28,3 +29,5 @@ def flaredetect(flux, slicenum=0):
 def noisecalc (flux):
     return np.var(flux)
 
+def getlength():
+    return len(listFlare)
