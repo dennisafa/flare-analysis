@@ -57,7 +57,7 @@ class strPlot:
 
 
     def guesspeaks(self): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
-        self.detflares = fd.flaredetect(self.flux)
+        self.detflares = fd.flaredetect(self.flux, self.time)
         self.flarecount = fd.getlength()
         self.nflares = np.shape(self.detflares)[0]
         self.params = np.zeros([self.nflares, 3])
@@ -90,14 +90,10 @@ class strPlot:
         return bounds
 
     def computegeorge (self):
-        testmodel = 1 * np.sin(2*np.pi/ 2.5) * self.flux
 
         kernel = kernels.ExpSine2Kernel(gamma=10, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
         self.gp = george.GP(kernel)
         self.gp.compute(self.time, self.flux)
-        print(kernel)
-        #result = minimize(self.neg_ln_like, self.gp.get_parameter_vector(), jac=self.grad_neg_ln_like)
-        #self.gp.set_parameter_vector(result.x)
         pred_mean, pred_var = self.gp.predict(self.flux, self.time, return_var=True)
         return pred_mean
 
@@ -111,14 +107,14 @@ def checkzero(l):
 
 def remove_flares(flare):
 
-    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
+    while len(fd.flaredetect(flare.flux, flare.time)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         flare.flux = flare.flux-tempmodel.flatten()
     return flare.flux
 
 def computegeorge (flux, time):
 
-    kernel = kernels.ExpSine2Kernel(gamma=10, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
+    kernel = kernels.ExpSine2Kernel(gamma=35, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
     gp = george.GP(kernel)
     gp.compute(time, flux)
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
@@ -150,25 +146,29 @@ def sub_flares(flare, period, phase, range1, range2): # loops through a subset o
     flare_orig = flare.flux
     finalmodel = 0
     i = 0
-    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
+    while len(fd.flaredetect(flare.flux, flare.time)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         finalmodel += tempmodel
         flare.flux = flare.flux-tempmodel.flatten()
         i+=1
 
-    if i > 1:
+    if i > 0:
 
-        pl.plot(flare.time, flare_orig,color = 'Blue', label = 'Original flux')
-        pl.plot(flare.time, period[range1:range2], color='Grey', label = 'Period model')
-        pl.plot(flare.time, finalmodel.flatten(),color = "Black", linestyle= '--', label = 'Flare model')
-        pl.legend(loc='upper left')
-        pl.xlabel('Time - BJD')
-        pl.ylabel('Flux - Normalized 0')
-        pl.show()
-        print ("Number of flares in rotational period {}, = {}".format(phase, len(fd.flaredetect(finalmodel.flatten()))))
+        final_count = fd.model_peaks(list(finalmodel.flatten()))
+        if final_count > 0:
+            print("{} flares detected in period {}".format(final_count, phase))
+            pl.plot(flare.time, flare_orig, color='Blue', label='Original flux')
+            pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
+            pl.plot(flare.time, finalmodel.flatten(), color="Black", linestyle='--', label='Flare model')
+            pl.legend(loc='upper left')
+            pl.xlabel('Time - BJD')
+            pl.ylabel('Flux - Normalized 0')
+            pl.show()
+
         #print(fd.getlength())
-        return len(fd.flaredetect(finalmodel.flatten()))
-    return 0
+    else:
+        print("No flares detected in period {}".format(phase))
+
 
 
 def sub_flare_model(flare):
@@ -189,22 +189,45 @@ def run():
     fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
     #test = KeplerTargetPixelFile.from_fits_images("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits")
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
-    flare_star = strPlot(lc359, 0, len(lc359.flux))
 
-    flare_count = []
-    count = 300
 
-    for i in range(0, len(lc359.flux), count):
-        if i < len(lc359.flux) - 1:
-            flare = strPlot(lc359, i, i+count)
-            mod_flare = strPlot(lc359, i, i+count)
-            clean_flare = remove_flares(mod_flare)
-            george_model = computegeorge(clean_flare, flare.time)
-            period = make_period_fit(mod_flare.time, george_model)
-            for i, n in enumerate(period):
-                if i < len(period) - 1:
-                    flare = strPlot(lc359, period[i], period[i + 1])
-                    sub_flares(flare, george_model, i, period[i], period[i+1])
+    print("Creating period model...")
+    flare = strPlot(lc359, 0, len(lc359.flux))
+    mod_flare = strPlot(lc359, 0, len(lc359.flux))
+    clean_flare = remove_flares(mod_flare)
+    george_model = computegeorge(flare.flux, flare.time)
+
+
+
+
+    test_model = flare.flux[:300] - george_model[:300]
+
+    george_model2 = computegeorge(test_model, flare.time[:300])
+    clean_model2 = george_model2 + george_model[:300]
+
+
+    pl.plot(flare.time[:300], clean_model2[:300])
+    pl.plot(flare.time[:300], flare.flux[:300])
+    pl.show()
+    pl.clf()
+    final_plot = flare.flux[:300] - clean_model2
+    pl.plot(final_plot)
+    pl.show()
+
+
+    avg_period = []
+
+    # for i, p in enumerate(period):
+    #     if i < len(period) - 1:
+    #         avg_period.append(mod_flare.time[period[i+1]] - mod_flare.time[period[i]])
+    #
+    # typ_period = np.average(avg_period)
+    #
+    # for i, n in enumerate(period):
+    #     if i < len(period) - 1:
+    #         if period[i+1] - period[i] > typ_period:
+    #             flare = strPlot(lc359, period[i], period[i + 1])
+    #             sub_flares(flare, george_model, i, period[i], period[i+1])
 
 
 def isdirtest():
@@ -212,7 +235,7 @@ def isdirtest():
     print(boolisTrue)
 
 def georgetest():
-    fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits")
+    fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
 
     period_flare = strPlot(lc359, 0, 500)

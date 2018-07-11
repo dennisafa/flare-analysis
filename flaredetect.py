@@ -18,7 +18,7 @@ def flaredetect(flux, slicenum=0):
                         listFlare.append(peak)
                     j+=1
             else:
-                if (flux[j] - flux[j - 1]) > 0 and (flux[j] - flux[j-1]) > noise**1/3:
+                if (flux[j] - flux[j - 1]) > 0 and (flux[j] - flux[j-1]) > noise * 2:
                     listFlare.append(peak)
                 j += 1
         else:
@@ -31,3 +31,17 @@ def noisecalc (flux):
 
 def getlength():
     return len(listFlare)
+
+def model_peaks(flux):
+    flux = np.asarray(flux)
+    listFlare = []
+    j = 0
+    while j < len(flux) - 1:
+        if (flux[j] - flux[j + 1]) < 0:
+           while j < len(flux) - 1 and flux[j] < flux[j + 1]:
+               j += 1
+           listFlare.append(flux[j])
+        else:
+            j+=1
+    return len(listFlare)
+
