@@ -91,7 +91,7 @@ class strPlot:
 
     def computegeorge (self):
 
-        kernel = kernels.ExpSine2Kernel(gamma=10, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
+        kernel = kernels.ExpSine2Kernel(gamma=35, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
         self.gp = george.GP(kernel)
         self.gp.compute(self.time, self.flux)
         pred_mean, pred_var = self.gp.predict(self.flux, self.time, return_var=True)
@@ -114,7 +114,7 @@ def remove_flares(flare):
 
 def computegeorge (flux, time):
 
-    kernel = kernels.ExpSine2Kernel(gamma=35, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
+    kernel = kernels.ExpSine2Kernel(gamma=15, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
     gp = george.GP(kernel)
     gp.compute(time, flux)
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
@@ -186,33 +186,52 @@ def sub_flare_model(flare):
 def run():
     # stars to test george on: 206208968, 201205469, 201885041
 
+    #fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
     fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
-    #test = KeplerTargetPixelFile.from_fits_images("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits")
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
 
 
     print("Creating period model...")
-    flare = strPlot(lc359, 0, len(lc359.flux))
-    mod_flare = strPlot(lc359, 0, len(lc359.flux))
-    clean_flare = remove_flares(mod_flare)
-    george_model = computegeorge(flare.flux, flare.time)
+    flare = strPlot(lc359, 10, 200)
 
 
+    george_model = computegeorge(flare.flux, flare.time) # create an initial model
+    sub_model = flare.flux - george_model # subtract the george model from the raw data
+    george_model2 = computegeorge(sub_model, flare.time) # create a model of the data with george model subbed
+    clean_model2 = george_model2 + george_model #plot the new model
+    final_plot = flare.flux - clean_model2
+
+    figplot = pl.figure(figsize=(10,10))
+    figplot.subplots_adjust(hspace=0.4, wspace = 0.4)
+    raw_data = figplot.add_subplot(2,2,1)
+    with_george = figplot.add_subplot(2,2,2)
+    first_reduce = figplot.add_subplot(2,2,3)
+    second_reduce = figplot.add_subplot(2,2,4)
 
 
-    test_model = flare.flux[:300] - george_model[:300]
+    raw_data.set_ylabel("Normalized Flux")
+    raw_data.set_xlabel("BJD")
+    raw_data.plot(flare.time, flare.flux, color="Black", label="Raw flux")
+    #raw_data.legend(loc='upper left')
 
-    george_model2 = computegeorge(test_model, flare.time[:300])
-    clean_model2 = george_model2 + george_model[:300]
+    with_george.set_ylabel("Normalized Flux")
+    with_george.set_xlabel("BJD")
+    with_george.plot(flare.time, flare.flux, color="Black", label="Raw flux")
+    with_george.plot(flare.time, george_model, color="Blue", linestyle='--', label="George Model")
+    #raw_data.legend(loc='upper right')
 
+    first_reduce.set_ylabel("Normalized Flux")
+    first_reduce.set_xlabel("BJD")
+    first_reduce.plot(flare.time, sub_model, color="Black", label="Flux w/ subtracted model")
+    first_reduce.plot(flare.time, george_model2, color="Blue", linestyle='--')
+    #raw_data.legend(loc='lower left')
 
-    pl.plot(flare.time[:300], clean_model2[:300])
-    pl.plot(flare.time[:300], flare.flux[:300])
+    second_reduce.set_ylabel("Normalized Flux")
+    second_reduce.set_xlabel("BJD")
+    second_reduce.plot(flare.time, final_plot, color="Black")
+
     pl.show()
-    pl.clf()
-    final_plot = flare.flux[:300] - clean_model2
-    pl.plot(final_plot)
-    pl.show()
+
 
 
     avg_period = []

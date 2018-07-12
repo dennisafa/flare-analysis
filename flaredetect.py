@@ -3,7 +3,7 @@ def flaredetect(flux, slicenum=0):
     global listFlare
     j = 0
     listFlare = []
-    baseval = np.abs(np.average(flux) * 1.9)
+    baseval = np.abs(np.average(flux) * 1.5)
     noise = noisecalc(flux)
     while j < len(flux)-1:
         if flux[j] > baseval:
