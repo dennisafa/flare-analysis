@@ -45,9 +45,12 @@ class strPlot:
         model = self.getmodel(p, data)
         return np.sum((model - y) ** 2)
 
-    def __init__(self, star, range1, range2): # cleans the list of flux, normalizes to 0
+    def __init__(self, star, range1, range2, model=None): # cleans the list of flux, normalizes to 0
         sap = star.remove_outliers().remove_nans()
-        self.flux = sap.flux[range1:range2]
+        if model is not None:
+            self.flux = model[range1:range2]
+        else:
+            self.flux = sap.flux[range1:range2]
         self.time = sap.time[range1:range2]
         self.flux = (self.flux/np.median(self.flux)) - 1
         self.flux = [number / scipy.std(self.flux) for number in self.flux]
@@ -57,14 +60,14 @@ class strPlot:
 
 
     def guesspeaks(self): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
-        self.detflares = fd.flaredetect(self.flux, self.time)
+        self.detflares = fd.flaredetect(self.flux)
         self.flarecount = fd.getlength()
         self.nflares = np.shape(self.detflares)[0]
         self.params = np.zeros([self.nflares, 3])
         for i, flareVal in enumerate(self.detflares):
             self.flarepeak = flareVal
             self.flaretime = self.findflaretime(self.flarepeak, self.flux, self.time)
-            p = [self.flaretime, 0.004, self.flarepeak]
+            p = [self.flaretime, 0.05, self.flarepeak]
             self.params[i, :] = p
         return np.log(self.params)
 
@@ -107,7 +110,7 @@ def checkzero(l):
 
 def remove_flares(flare):
 
-    while len(fd.flaredetect(flare.flux, flare.time)) > 0:# while flares are still being detected, compute its model and subtract flares
+    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         flare.flux = flare.flux-tempmodel.flatten()
     return flare.flux
@@ -134,7 +137,7 @@ def sign_change(model): # returns indices where the first derivative changes sig
             j+=1
     return change_sign
 
-def make_period_fit(time, flux):
+def detect_period(flux, time):
 
     dx = np.diff(time) / np.diff(flux)
     period_change = sign_change(dx)
@@ -146,7 +149,7 @@ def sub_flares(flare, period, phase, range1, range2): # loops through a subset o
     flare_orig = flare.flux
     finalmodel = 0
     i = 0
-    while len(fd.flaredetect(flare.flux, flare.time)) > 0:# while flares are still being detected, compute its model and subtract flares
+    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         finalmodel += tempmodel
         flare.flux = flare.flux-tempmodel.flatten()
@@ -158,7 +161,7 @@ def sub_flares(flare, period, phase, range1, range2): # loops through a subset o
         if final_count > 0:
             print("{} flares detected in period {}".format(final_count, phase))
             pl.plot(flare.time, flare_orig, color='Blue', label='Original flux')
-            pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
+            #pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
             pl.plot(flare.time, finalmodel.flatten(), color="Black", linestyle='--', label='Flare model')
             pl.legend(loc='upper left')
             pl.xlabel('Time - BJD')
@@ -173,14 +176,13 @@ def sub_flares(flare, period, phase, range1, range2): # loops through a subset o
 
 def sub_flare_model(flare):
     guessparams = flare.guesspeaks()  # returns the parameters of where and when each flare occured
-    #print(flare.flarecount)
-    notempty = checkzero(flare.detflares)  # checks for flares to exit in the data set before modeling
-    if notempty:
-        bounds = flare.setbounds(guessparams)
-        fitparams = flare.fit(guessparams, bounds)  # fit the parameters with a minimization process
-        model = flare.getmodel(fitparams, [flare.time, flare.flux,
+    #notempty = checkzero(flare.detflares)  # checks for flares to exit in the data set before modeling
+
+    bounds = flare.setbounds(guessparams)
+    fitparams = flare.fit(guessparams, bounds)  # fit the parameters with a minimization process
+    model = flare.getmodel(fitparams, [flare.time, flare.flux,
                                            flare.nflares])
-        return model
+    return model
 
 
 def run():
@@ -191,67 +193,48 @@ def run():
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
 
 
-    print("Creating period model...")
-    flare = strPlot(lc359, 10, 200)
+    print("Creating model...")
+    flare = strPlot(lc359, 0, len(lc359.flux))
+    period = detect_period(flare.flux, flare.time)
+    final_model = create_final_model(flare)
+    flare.flux = final_model
 
+    appaloosa_model = sub_flare_model(flare)
+    pl.plot(appaloosa_model.flatten())
+    pl.show()
+    pl.clf()
 
-    george_model = computegeorge(flare.flux, flare.time) # create an initial model
-    sub_model = flare.flux - george_model # subtract the george model from the raw data
-    george_model2 = computegeorge(sub_model, flare.time) # create a model of the data with george model subbed
-    clean_model2 = george_model2 + george_model #plot the new model
-    final_plot = flare.flux - clean_model2
-
-    figplot = pl.figure(figsize=(10,10))
-    figplot.subplots_adjust(hspace=0.4, wspace = 0.4)
-    raw_data = figplot.add_subplot(2,2,1)
-    with_george = figplot.add_subplot(2,2,2)
-    first_reduce = figplot.add_subplot(2,2,3)
-    second_reduce = figplot.add_subplot(2,2,4)
-
-
-    raw_data.set_ylabel("Normalized Flux")
-    raw_data.set_xlabel("BJD")
-    raw_data.plot(flare.time, flare.flux, color="Black", label="Raw flux")
-    #raw_data.legend(loc='upper left')
-
-    with_george.set_ylabel("Normalized Flux")
-    with_george.set_xlabel("BJD")
-    with_george.plot(flare.time, flare.flux, color="Black", label="Raw flux")
-    with_george.plot(flare.time, george_model, color="Blue", linestyle='--', label="George Model")
-    #raw_data.legend(loc='upper right')
-
-    first_reduce.set_ylabel("Normalized Flux")
-    first_reduce.set_xlabel("BJD")
-    first_reduce.plot(flare.time, sub_model, color="Black", label="Flux w/ subtracted model")
-    first_reduce.plot(flare.time, george_model2, color="Blue", linestyle='--')
-    #raw_data.legend(loc='lower left')
-
-    second_reduce.set_ylabel("Normalized Flux")
-    second_reduce.set_xlabel("BJD")
-    second_reduce.plot(flare.time, final_plot, color="Black")
-
+    pl.plot(flare.time[:300], flare.flux[:300])
+    pl.plot(flare.time[:300], appaloosa_model.flatten()[:300])
     pl.show()
 
 
 
-    avg_period = []
 
+
+    # avg_period = []
+    #
     # for i, p in enumerate(period):
     #     if i < len(period) - 1:
-    #         avg_period.append(mod_flare.time[period[i+1]] - mod_flare.time[period[i]])
+    #         avg_period.append(period[i+1] - period[i])
     #
     # typ_period = np.average(avg_period)
     #
     # for i, n in enumerate(period):
     #     if i < len(period) - 1:
     #         if period[i+1] - period[i] > typ_period:
-    #             flare = strPlot(lc359, period[i], period[i + 1])
-    #             sub_flares(flare, george_model, i, period[i], period[i+1])
+    #             flare = strPlot(lc359, period[i], period[i + 1], model=final_model)
+    #             sub_flares(flare, period, i, period[i], period[i+1])
 
+def create_final_model(flare):
+    george_model = computegeorge(flare.flux, flare.time)  # create an initial model
+    sub_model = flare.flux - george_model  # subtract the george model from the raw data
+    george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
+    clean_model2 = george_model2 + george_model  # plot the new model
+    final_plot = flare.flux - clean_model2
 
-def isdirtest():
-    boolisTrue = os.path.isdir("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits")
-    print(boolisTrue)
+    return final_plot
+
 
 def georgetest():
     fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
@@ -261,6 +244,37 @@ def georgetest():
     model = period_flare.computegeorge()
     pl.plot(period_flare.time, model)
     pl.plot(period_flare.time, period_flare.flux)
+    pl.show()
+
+def plot_final_model(flare, george_model, sub_model, george_model2, final_plot):
+    figplot = pl.figure(figsize=(10, 10))
+    figplot.subplots_adjust(hspace=0.4, wspace=0.4)
+    raw_data = figplot.add_subplot(2, 2, 1)
+    with_george = figplot.add_subplot(2, 2, 2)
+    first_reduce = figplot.add_subplot(2, 2, 3)
+    second_reduce = figplot.add_subplot(2, 2, 4)
+
+    raw_data.set_ylabel("Normalized Flux")
+    raw_data.set_xlabel("BJD")
+    raw_data.plot(flare.time, flare.flux, color="Black", label="Raw flux")
+    # raw_data.legend(loc='upper left')
+
+    with_george.set_ylabel("Normalized Flux")
+    with_george.set_xlabel("BJD")
+    with_george.plot(flare.time, flare.flux, color="Black", label="Raw flux")
+    with_george.plot(flare.time, george_model, color="Blue", linestyle='--', label="George Model")
+    # raw_data.legend(loc='upper right')
+
+    first_reduce.set_ylabel("Normalized Flux")
+    first_reduce.set_xlabel("BJD")
+    first_reduce.plot(flare.time, sub_model, color="Black", label="Flux w/ subtracted model")
+    first_reduce.plot(flare.time, george_model2, color="Blue", linestyle='--')
+    # raw_data.legend(loc='lower left')
+
+    second_reduce.set_ylabel("Normalized Flux")
+    second_reduce.set_xlabel("BJD")
+    second_reduce.plot(flare.time, final_plot, color="Black")
+
     pl.show()
 
 '''

@@ -1,10 +1,12 @@
 import numpy as np
-def flaredetect(flux, slicenum=0):
+def flaredetect(flux):
     global listFlare
+    global firstval
     j = 0
     listFlare = []
-    baseval = np.abs(np.average(flux) * 1.5)
-    noise = noisecalc(flux)
+    baseval = np.abs(np.average(flux) * 4)
+    print(baseval)
+    noise = get_noise(flux)
     while j < len(flux)-1:
         if flux[j] > baseval:
             peak = flux[j]
@@ -14,12 +16,21 @@ def flaredetect(flux, slicenum=0):
                     peak = flux[j + 1]
                     j += 1
                 else:
-                    if peak - firstval > noise * 2:
+                    if peak - firstval > noise:
                         listFlare.append(peak)
-                    j+=1
+                        firstval = flux[j]
+                    j += 1
             else:
-                if (flux[j] - flux[j - 1]) > 0 and (flux[j] - flux[j-1]) > noise * 2:
-                    listFlare.append(peak)
+                temp = flux[j]
+                base = flux[j]
+                h = j
+                while h > 1 and flux[h] > flux[h-1]:
+                    base = flux[h - 1] # peak will be point before it rises
+                    h -= 1
+                else:
+                    if temp - base > noise:
+                        listFlare.append(temp)
+                        print(flux)
                 j += 1
         else:
             j += 1
@@ -45,3 +56,8 @@ def model_peaks(flux):
             j+=1
     return len(listFlare)
 
+def get_noise(flux):
+    list_flare = [flare for flare in flux if flare < 0.5]
+    noise = np.var(list_flare)
+    print(noise)
+    return noise
