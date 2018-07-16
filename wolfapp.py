@@ -67,7 +67,7 @@ class strPlot:
         for i, flareVal in enumerate(self.detflares):
             self.flarepeak = flareVal
             self.flaretime = self.findflaretime(self.flarepeak, self.flux, self.time)
-            p = [self.flaretime, 0.05, self.flarepeak]
+            p = [self.flaretime, 0.004, self.flarepeak]
             self.params[i, :] = p
         return np.log(self.params)
 
@@ -117,7 +117,7 @@ def remove_flares(flare):
 
 def computegeorge (flux, time):
 
-    kernel = kernels.ExpSine2Kernel(gamma=15, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
+    kernel = kernels.ExpSine2Kernel(gamma=5, log_period=0.75) * kernels.Matern52Kernel(metric=0.5)  # a * cos(2pi/T * (t-3082) ) *
     gp = george.GP(kernel)
     gp.compute(time, flux)
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
@@ -144,33 +144,33 @@ def detect_period(flux, time):
     return period_change
 
 
-def sub_flares(flare, period, phase, range1, range2): # loops through a subset of flux values, detects flares, then subtracts and performs again
-    global flare_orig
-    flare_orig = flare.flux
-    finalmodel = 0
-    i = 0
-    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
-        tempmodel = sub_flare_model(flare)
-        finalmodel += tempmodel
-        flare.flux = flare.flux-tempmodel.flatten()
-        i+=1
-
-    if i > 0:
-
-        final_count = fd.model_peaks(list(finalmodel.flatten()))
-        if final_count > 0:
-            print("{} flares detected in period {}".format(final_count, phase))
-            pl.plot(flare.time, flare_orig, color='Blue', label='Original flux')
-            #pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
-            pl.plot(flare.time, finalmodel.flatten(), color="Black", linestyle='--', label='Flare model')
-            pl.legend(loc='upper left')
-            pl.xlabel('Time - BJD')
-            pl.ylabel('Flux - Normalized 0')
-            pl.show()
-
-        #print(fd.getlength())
-    else:
-        print("No flares detected in period {}".format(phase))
+# def sub_flares(flare, period, phase, range1, range2): # loops through a subset of flux values, detects flares, then subtracts and performs again
+#     global flare_orig
+#     flare_orig = flare.flux
+#     finalmodel = 0
+#     i = 0
+#     while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
+#         tempmodel = sub_flare_model(flare)
+#         finalmodel += tempmodel
+#         flare.flux = flare.flux-tempmodel.flatten()
+#         i+=1
+#
+#     if i > 0:
+#
+#         final_count = fd.model_peaks(list(finalmodel.flatten()))
+#         if final_count > 0:
+#             print("{} flares detected in period {}".format(final_count, phase))
+#             pl.plot(flare.time, flare_orig, color='Blue', label='Original flux')
+#             #pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
+#             pl.plot(flare.time, finalmodel.flatten(), color="Black", linestyle='--', label='Flare model')
+#             pl.legend(loc='upper left')
+#             pl.xlabel('Time - BJD')
+#             pl.ylabel('Flux - Normalized 0')
+#             pl.show()
+#
+#         #print(fd.getlength())
+#     else:
+#         print("No flares detected in period {}".format(phase))
 
 
 
@@ -188,25 +188,63 @@ def sub_flare_model(flare):
 def run():
     # stars to test george on: 206208968, 201205469, 201885041
 
-    #fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
-    fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo206208968-c03_lpd-targ.fits")
+    fits = KeplerTargetPixelFile("/Users/Dennis/Desktop/fits/ktwo201885041-c14_lpd-targ.fits", cadence = 'short')
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
 
 
     print("Creating model...")
     flare = strPlot(lc359, 0, len(lc359.flux))
-    period = detect_period(flare.flux, flare.time)
-    final_model = create_final_model(flare)
-    flare.flux = final_model
+    flux_orig = flare.flux
 
-    appaloosa_model = sub_flare_model(flare)
-    pl.plot(appaloosa_model.flatten())
-    pl.show()
-    pl.clf()
+    get = final()
+    get.create_final_model(flare)
+    final_plot = get.final_plot
+    period_list = get.period
+    period = detect_period(period_list, flare.time)
+    print(period)
+    flare.flux = final_plot
+    appaloosa_model = np.ravel(sub_flare_model(flare))
+    slice = 0
 
-    pl.plot(flare.time[:300], flare.flux[:300])
-    pl.plot(flare.time[:300], appaloosa_model.flatten()[:300])
-    pl.show()
+    print("Time1 = ", flare.time[period[1]])
+    print("Time2 = ", flare.time[period[2]])
+    period = flare.time[period[2]] - flare.time[period[1]]
+    print("Wolf-359 periodicity = {}".format(period))
+
+
+
+
+    # typ_period = get_period_change(period)
+    # p = 0
+    # while p < len(period) - 1:
+    #     numIncrease = 1
+    #     if p < len(period) - 1:
+    #         if (period[p + 1] - period[p]) < typ_period:
+    #             numIncrease = 2
+    #             num_flares = fd.model_peaks(appaloosa_model[period[p]:period[p+numIncrease]]) # model the peaks with a more accurate period estimate
+    #
+    #             if num_flares > 0:
+    #                 pl.plot(flare.time[period[p]:period[p+numIncrease]], flare.flux[period[p]:period[p+numIncrease]])
+    #                 pl.plot(flare.time[period[p]:period[p+numIncrease]], appaloosa_model[period[p]:period[p+numIncrease]])
+    #                 pl.xlabel("Slice = {}".format(slice))
+    #                 print("Flares in slice {} = {}".format(slice, num_flares))
+    #                 pl.show()
+    #             slice += 1
+    #         else:
+    #             num_flares = fd.model_peaks(appaloosa_model[period[p]:period[p + 1]]) #
+    #             if num_flares > 0:
+    #                 pl.plot(flare.time[period[p]:period[p + 1]], flare.flux[period[p]:period[p + 1]])
+    #                 pl.plot(flare.time[period[p]:period[p + 1]],
+    #                     appaloosa_model[period[p]:period[p + 1]])
+    #                 pl.show()
+    #                 print("Flares in slice {} = {}".format(slice, num_flares))
+    #             slice += 1
+    #
+    #     print ("First period ", period[p])
+    #     p += numIncrease
+    #     print ("Second period ", period[p])
+
+
 
 
 
@@ -226,14 +264,31 @@ def run():
     #             flare = strPlot(lc359, period[i], period[i + 1], model=final_model)
     #             sub_flares(flare, period, i, period[i], period[i+1])
 
-def create_final_model(flare):
-    george_model = computegeorge(flare.flux, flare.time)  # create an initial model
-    sub_model = flare.flux - george_model  # subtract the george model from the raw data
-    george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
-    clean_model2 = george_model2 + george_model  # plot the new model
-    final_plot = flare.flux - clean_model2
+def get_period_change(period):
+    avg_period = []
+    for i, p in enumerate(period):
+        if i < len(period) - 1:
+            avg_period.append(period[i + 1] - period[i])
 
-    return final_plot
+    return np.average(avg_period)
+
+
+class final:
+    period = []
+    final_plot = []
+
+    def create_final_model(self, flare):
+
+        george_model = computegeorge(flare.flux, flare.time)# create an initial model
+        sub_model = flare.flux - george_model  # subtract the george model from the raw data
+        george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
+        clean_model2 = george_model2 + george_model  # plot the new model
+        self.final_plot = flare.flux - clean_model2
+        self.period = sf(george_model, 51, 3)
+
+        pl.plot(flare.time[:300], self.period[:300])
+        pl.show()
+
 
 
 def georgetest():
