@@ -1,0 +1,67 @@
+Wolf-359 Short Cadence Flare and Period Analysis
+
+period 1 = 26 from 3074.381 to 3076.553 
+period 2 = 25 from 3076.553 to 3079.165 
+period 3 = 33 from 3079.165 to 3081.956 
+period 4 = 32 from 3081.956 to 3084.448 
+period 5 = 26 from 3084.448 to 3087.237 
+period 6 = 36 from 3087.237 to 3090.071 
+period 7 = 33 from 3090.071 to 3092.644 
+period 8 = 21 from 3092.644 to 3095.302 
+period 9 = 33 from 3095.302 to 3097.908 
+period 10 = 40 from 3097.908 to 3100.785 
+period 11 = 28 from 3100.785 to 3102.910 
+period 12 = 27 from 3102.910 to 3106.341 
+period 13 = 37 from 3106.341 to 3108.935 
+period 14 = 37 from 3108.935 to 3111.976 
+period 15 = 26 from 3111.976 to 3114.390 
+period 16 = 29 from 3114.390 to 3117.099 
+period 17 = 42 from 3117.099 to 3119.920 
+period 18 = 44 from 3119.920 to 3122.656 
+period 19 = 35 from 3122.656 to 3125.269 
+period 20 = 34 from 3125.269 to 3128.010 
+period 21 = 35 from 3128.010 to 3130.703 
+period 22 = 40 from 3130.703 to 3133.204 
+period 23 = 31 from 3133.204 to 3135.779 
+period 24 = 26 from 3135.779 to 3138.587 
+period 25 = 39 from 3138.587 to 3142.442 
+period 26 = 27 from 3142.442 to 3144.069 
+period 27 = 44 from 3144.069 to 3146.819 
+period 28 = 36 from 3146.819 to 3149.541 
+period 29 = 27 from 3149.541 to 3151.315 
+period 30 = 26 from 3151.315 to 3152.422 
+
+ Average # flares = 31.451612903225808
+ Approximate period = 2.6013864643903313period 1 = 26 from 3074.381 to 3076.553 
+period 2 = 25 from 3076.553 to 3079.165 
+period 3 = 33 from 3079.165 to 3081.956 
+period 4 = 31 from 3081.956 to 3084.448 
+period 5 = 26 from 3084.448 to 3087.237 
+period 6 = 35 from 3087.237 to 3090.071 
+period 7 = 34 from 3090.071 to 3092.644 
+period 8 = 21 from 3092.644 to 3095.302 
+period 9 = 32 from 3095.302 to 3097.908 
+period 10 = 41 from 3097.908 to 3100.785 
+period 11 = 25 from 3100.785 to 3102.910 
+period 12 = 27 from 3102.910 to 3106.341 
+period 13 = 37 from 3106.341 to 3108.935 
+period 14 = 37 from 3108.935 to 3111.976 
+period 15 = 26 from 3111.976 to 3114.390 
+period 16 = 30 from 3114.390 to 3117.099 
+period 17 = 41 from 3117.099 to 3119.920 
+period 18 = 44 from 3119.920 to 3122.656 
+period 19 = 35 from 3122.656 to 3125.269 
+period 20 = 36 from 3125.269 to 3128.010 
+period 21 = 35 from 3128.010 to 3130.703 
+period 22 = 40 from 3130.703 to 3133.204 
+period 23 = 31 from 3133.204 to 3135.779 
+period 24 = 26 from 3135.779 to 3138.587 
+period 25 = 40 from 3138.587 to 3142.442 
+period 26 = 27 from 3142.442 to 3144.069 
+period 27 = 44 from 3144.069 to 3146.819 
+period 28 = 35 from 3146.819 to 3149.541 
+period 29 = 28 from 3149.541 to 3151.315 
+period 30 = 22 from 3151.315 to 3152.422 
+
+ Average # flares = 31.29032258064516
+ Approximate period = 2.6013864643903313
