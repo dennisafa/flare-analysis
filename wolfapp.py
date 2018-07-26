@@ -174,20 +174,22 @@ def get_period_change(period):
 
 def run():
     # stars to test george on: 206208968, 201205469, 201885041
+    # testing 206208968 - 4:41 pm
 
-    fits = KeplerTargetPixelFile.from_archive("201885041", cadence = 'short')
+
+    fits = KeplerTargetPixelFile.from_archive("206208968")
     lc359 = fits.to_lightcurve(aperture_mask=fits.pipeline_mask)
 
     print("Creating model...")
     flare = strPlot(lc359, 0, len(lc359.flux))
-    flux_orig = flare.flux
 
-    get = FinalModelTest() # create an object to get model and smooth period curve from
+    get = FinalModelGeorge() # create an object to get model and smooth period curve from
     get.create_final_model(flare)
     final_plot = get.final_plot
     period_list = get.period
     period = detect_period(period_list, flare.time) # checks where the periods derivative changes sign, returns array of points
     flare.flux = final_plot
+
     appaloosa_model = np.ravel(sub_flare_model(flare)) # final model of the flares
     print("Period",period)
     print("Peaks model",appaloosa_model)
@@ -195,119 +197,90 @@ def run():
     avg_flare_count = []
     avg_period = []
     count = 1
+    periodcount = []
+    timeperiodcount = []
 
     print("Finished")
 
-    file = open('LeoStats.txt', 'a')
+    #file = open('/Users/Dennis/Desktop/wolf359Final/plots10/FlareRate10%', 'a')
     for i, p in enumerate(period):
         if i < len(period) - 1:
              # check if the period is greater than 1.5 days
             flare_count = fd.model_peaks(appaloosa_model[period[i]:period[i+1]])
-
-            figplot = pl.figure(figsize=(6,3))
-            subbed_george = figplot.add_subplot(1,2,1)
-            orig = figplot.add_subplot(1,2,2)
-
-            subbed_george.set_xlabel("BJD - Period # {}".format(count))
-            subbed_george.set_ylabel("Normalized Flux - Subtracted Rotation")
-            subbed_george.plot(flare.time[period[i]:period[i + 1]], final_plot[period[i]:period[i + 1]],color='Black')
-
-
-            orig.set_xlabel("BJD - Period # {}".format(count))
-            orig.set_ylabel("Normalized Flux - Rotation")
-            orig.plot(flare.time[period[i]:period[i + 1]], flux_orig[period[i]:period[i + 1]],color='Blue')
-
-            figplot.show()
-            figplot.savefig('period {}'.format(count), format='png')
-
             avg_flare_count.append(flare_count)
             avg_period.append(flare.time[period[i+1]] - flare.time[period[i]])
-            file.write("period {} = {} from {:0.3f} to {:0.3f} \n".format(count,flare_count, flare.time[period[i]], flare.time[period[i+1]]))
+            #file.write("period {} = {} from {:0.3f} to {:0.3f} \n".format(count,flare_count, flare.time[period[i]], flare.time[period[i+1]]))
             count += 1
+            timeperiodcount.append(flare.time[period[i+1]] - flare.time[period[i]])
+            periodcount.append(count)
     est_avg_flare = np.sum(avg_flare_count) / count
     est_avf_period = np.average(avg_period)
-    file.write("\n Average # flares = {}\n Approximate period = {}".format(est_avg_flare, est_avf_period))
-    file.close()
+
+    pl.plot(periodcount, avg_flare_count, linestyle = '--', color='Black', marker='o')
+    pl.xlabel("Period")
+    pl.ylabel("# of flares")
+    pl.show()
+    pl.clf()
+    pl.plot(periodcount, timeperiodcount, color = 'Blue', linestyle='--')
+    pl.xlabel("Period")
+    pl.ylabel("Time (BJD)")
+    pl.show()
+    pl.clf()
+   # file.write("Average # flares = {}\nApproximate period = {}".format(est_avg_flare, est_avf_period))
+    #file.close()
 
 
-class FinalModel:
+class FinalModelGeorge:
     period = []
     final_plot = []
 
     def create_final_model(self, flare):
         # 113,008 points
+        flux_temp = flare.flux
 
-        george_model = computegeorge(flare.flux, flare.time)# create an initial model
-        print('A')
-        sub_model = flare.flux - george_model  # subtract the george model from the raw data
+        george_model = computegeorge(flux_temp, flare.time)# create an initial model
+        sub_model = flux_temp - george_model  # subtract the george model from the raw data
         george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
-        clean_model2 = george_model2 + george_model  # plot the new model
-        self.final_plot = flare.flux - clean_model2
-        self.period = sf(george_model, 51, 3)
-        self.period = sf(self.period, 51, 3)
-        self.period = sf(self.period, 51, 3)
-        self.period = sf(self.period, 51, 3)
 
-class FinalModelTest:
+        test_model = flux_temp - (george_model2 + george_model)
+        sub_model2 = sub_model - george_model2
+        george_model3 = computegeorge(sub_model2, flare.time)
+
+
+        sub_model3 = sub_model2 - george_model3
+        george_model4 = computegeorge(sub_model3, flare.time)
+
+        clean_model = george_model2 + george_model + george_model3 + george_model4
+        self.final_plot = flare.flux - clean_model# plot the new model
+        self.period = sf(george_model, 31, 3)
+
+
+        #flare, george_model, sub_model, george_model2, final_plot
+        #plot_final_model(flare, george_model, sub_model, george_model2, self.final_plot)
+
+
+        pl.ylabel("Normalized Flux")
+        # second_reduce.set_xticklabels(flare.time.astype(int))
+        pl.xlabel("Days")
+        pl.plot(flare.time[:250], self.final_plot[:250], color="Black", label='Flux')
+        pl.axhline(y=fd.get_std(flare.flux), color = 'Blue', label='2σ', linestyle = '--')
+        pl.legend(loc='upper right')
+
+        pl.show()
+        print("Model complete")
+
+
+class FinalModelSF:
     period = []
     final_plot = []
 
     def create_final_model(self, flare):
         # 113,008 points
-
+        #flare.flux = [flare for flare in flare.flux if flare > -0.5]
         sf_model = sf(flare.flux, 501, 3)
         self.period = sf(sf_model, 501, 3)
-
         for i in range(1000):
             self.period = sf(self.period, 501, 3)
-
         self.final_plot = flare.flux - self.period
 
-        instrument_period = sf(self.final_plot, 501, 3)
-        for i in range (1000):
-            instrument_period = sf(instrument_period, 501, 3)
 
-
-        orig_final = self.final_plot
-        self.final_plot = self.final_plot - instrument_period
-
-
-
-
-def plot_final_model(flare, george_model, sub_model, george_model2, final_plot):
-    figplot = pl.figure(figsize=(10, 10))
-    figplot.subplots_adjust(hspace=0.4, wspace=0.4)
-    raw_data = figplot.add_subplot(2, 2, 1)
-    with_george = figplot.add_subplot(2, 2, 2)
-    first_reduce = figplot.add_subplot(2, 2, 3)
-    second_reduce = figplot.add_subplot(2, 2, 4)
-
-    raw_data.set_ylabel("Normalized Flux")
-    raw_data.set_xlabel("BJD")
-    raw_data.plot(flare.time, flare.flux, color="Black", label="Raw flux")
-    # raw_data.legend(loc='upper left')
-
-    with_george.set_ylabel("Normalized Flux")
-    with_george.set_xlabel("BJD")
-    with_george.plot(flare.time, flare.flux, color="Black", label="Raw flux")
-    with_george.plot(flare.time, george_model, color="Blue", linestyle='--', label="George Model")
-    # raw_data.legend(loc='upper right')
-
-    first_reduce.set_ylabel("Normalized Flux")
-    first_reduce.set_xlabel("BJD")
-    first_reduce.plot(flare.time, sub_model, color="Black", label="Flux w/ subtracted model")
-    first_reduce.plot(flare.time, george_model2, color="Blue", linestyle='--')
-    # raw_data.legend(loc='lower left')
-
-    second_reduce.set_ylabel("Normalized Flux")
-    second_reduce.set_xlabel("BJD")
-    second_reduce.plot(flare.time, final_plot, color="Black")
-
-    pl.show()
-
-'''
-To do: 
-1) Use final model to calculate noise, modify flaredetect directly 
-2) Don't run final model through flaredetect, it cancels out flares
-
-'''
