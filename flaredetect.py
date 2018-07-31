@@ -4,6 +4,7 @@ def flaredetect(flux):
     global firstval
     j = 0
     listFlare = []
+
     baseval = get_std(flux) * 2 # 2 sigma deviation
     noise = get_noise(flux)
     print("Noise is",noise)
@@ -30,11 +31,10 @@ def flaredetect(flux):
                     h -= 1
                 else:
                     if temp - base > noise:
-                        listFlare.append(temp)
+                        listFlare.append(peak)
                 j += 1
         else:
             j += 1
-    #print('Flare detect successful, number of flares: ' + str(len(listFlare)) + ' at slice number ' + str(slicenum))
     return listFlare
 
 def noisecalc (flux):
@@ -69,9 +69,6 @@ def get_noise(flux):
     noise_check = []
     for i, val in enumerate(list_flare):
         if i < len(list_flare) - 1:
-            dist = list_flare[i] - list_flare[i+1]
-            if dist > 0:
-                noise_check.append(dist)
-            else:
-                noise_check.append(list_flare[i+1] - list_flare[i])
+            dist = np.absolute(list_flare[i] - list_flare[i+1])
+            noise_check.append(dist)
     return np.average(noise_check)

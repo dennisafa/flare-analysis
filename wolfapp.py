@@ -17,10 +17,12 @@ class strPlot:
         return max(flux)
 
     def findflaretime(self, flarepeak, flux, time): # retrieves the time of the flare
-        tof = time
-        for i, flare in enumerate(flux):
-            if flare == flarepeak:
-                return tof[i]
+        flare_times = []
+        flux = flux.tolist()
+        for i, flare in enumerate(flarepeak):
+            t = flux.index(flare)
+            flare_times.append(time[t])
+        return flare_times
 
     def getmodel(self, p, data): # computes the model of the flares using appaloosa's aflare1 function
         time, y, nflares = data
@@ -59,6 +61,31 @@ class strPlot:
             self.params[i, :] = p
         return np.log(self.params)
 
+
+    def flare_period_count(self, period):
+        det_flares = fd.flaredetect(self.flux)
+        flare_times = self.findflaretime(det_flares, self.flux, self.time)
+
+        print (flare_times)
+        print (period)
+
+        i = 0
+        j = 0
+        avg_period = []
+        total = 0
+        while i < len(period) - 1:
+            count = 0
+            avg_period.append(period[i + 1] - period[i])
+            print (period[i+1])
+            if j < len(flare_times):
+                while flare_times[j] < period[i+1] and j < len(flare_times) - 1:
+                    count += 1
+                    j += 1
+            i += 1
+            print("period {} had {} flares".format(i, count))
+            total += count
+        print("avg period is {} days".format(np.average(avg_period)))
+        print ("total flare events {}".format(total))
 
     def fit(self, p, bounds):
         result = minimize(self.ng_ln_like, p, args=[self.time, self.flux, self.nflares], method='L-BFGS-B', bounds=bounds)
@@ -103,7 +130,7 @@ def computegeorge (flux, time):
     return pred_mean
 
 
-def sign_change(model): # returns indices where the first derivative changes sign from positive to negative
+def sign_change(model, time): # returns indices where the first derivative changes sign from positive to negative
     change_sign = []
     j = 0
     while j < len(model)-1:
@@ -111,7 +138,7 @@ def sign_change(model): # returns indices where the first derivative changes sig
             while model[j] > 0 and j < len(model)-1:
                 j+=1
             else:
-                change_sign.append(j)
+                change_sign.append(time[j])
         else:
             j+=1
     return change_sign
@@ -119,43 +146,11 @@ def sign_change(model): # returns indices where the first derivative changes sig
 def detect_period(flux, time):
 
     dx = np.diff(time) / np.diff(flux)
-    period_change = sign_change(dx)
+    period_change = sign_change(dx, time)
     return period_change
-
-
-# def sub_flares(flare, period, phase, range1, range2): # loops through a subset of flux values, detects flares, then subtracts and performs again
-#     global flare_orig
-#     flare_orig = flare.flux
-#     finalmodel = 0
-#     i = 0
-#     while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
-#         tempmodel = sub_flare_model(flare)
-#         finalmodel += tempmodel
-#         flare.flux = flare.flux-tempmodel.flatten()
-#         i+=1
-#
-#     if i > 0:
-#
-#         final_count = fd.model_peaks(list(finalmodel.flatten()))
-#         if final_count > 0:
-#             print("{} flares detected in period {}".format(final_count, phase))
-#             pl.plot(flare.time, flare_orig, color='Blue', label='Original flux')
-#             #pl.plot(flare.time, period[range1:range2], color='Grey', label='Period model')
-#             pl.plot(flare.time, finalmodel.flatten(), color="Black", linestyle='--', label='Flare model')
-#             pl.legend(loc='upper left')
-#             pl.xlabel('Time - BJD')
-#             pl.ylabel('Flux - Normalized 0')
-#             pl.show()
-#
-#         #print(fd.getlength())
-#     else:
-#         print("No flares detected in period {}".format(phase))
-
-
 
 def sub_flare_model(flare):
     guessparams = flare.guesspeaks()  # returns the parameters of where and when each flare occured
-    #notempty = checkzero(flare.detflares)  # checks for flares to exit in the data set before modeling
 
     bounds = flare.setbounds(guessparams)
     fitparams = flare.fit(guessparams, bounds)  # fit the parameters with a minimization process
@@ -190,45 +185,7 @@ def run():
     period = detect_period(period_list, flare.time) # checks where the periods derivative changes sign, returns array of points
     flare.flux = final_plot
 
-    appaloosa_model = np.ravel(sub_flare_model(flare)) # final model of the flares
-    print("Period",period)
-    print("Peaks model",appaloosa_model)
-
-    avg_flare_count = []
-    avg_period = []
-    count = 1
-    periodcount = []
-    timeperiodcount = []
-
-    print("Finished")
-
-    #file = open('/Users/Dennis/Desktop/wolf359Final/plots10/FlareRate10%', 'a')
-    for i, p in enumerate(period):
-        if i < len(period) - 1:
-             # check if the period is greater than 1.5 days
-            flare_count = fd.model_peaks(appaloosa_model[period[i]:period[i+1]])
-            avg_flare_count.append(flare_count)
-            avg_period.append(flare.time[period[i+1]] - flare.time[period[i]])
-            #file.write("period {} = {} from {:0.3f} to {:0.3f} \n".format(count,flare_count, flare.time[period[i]], flare.time[period[i+1]]))
-            count += 1
-            timeperiodcount.append(flare.time[period[i+1]] - flare.time[period[i]])
-            periodcount.append(count)
-    est_avg_flare = np.sum(avg_flare_count) / count
-    est_avf_period = np.average(avg_period)
-
-    pl.plot(periodcount, avg_flare_count, linestyle = '--', color='Black', marker='o')
-    pl.xlabel("Period")
-    pl.ylabel("# of flares")
-    pl.show()
-    pl.clf()
-    pl.plot(periodcount, timeperiodcount, color = 'Blue', linestyle='--')
-    pl.xlabel("Period")
-    pl.ylabel("Time (BJD)")
-    pl.show()
-    pl.clf()
-   # file.write("Average # flares = {}\nApproximate period = {}".format(est_avg_flare, est_avf_period))
-    #file.close()
-
+    flare.flare_period_count(period)
 
 class FinalModelGeorge:
     period = []
@@ -236,37 +193,22 @@ class FinalModelGeorge:
 
     def create_final_model(self, flare):
         # 113,008 points
+
         flux_temp = flare.flux
 
         george_model = computegeorge(flux_temp, flare.time)# create an initial model
         sub_model = flux_temp - george_model  # subtract the george model from the raw data
         george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
-
-        test_model = flux_temp - (george_model2 + george_model)
         sub_model2 = sub_model - george_model2
         george_model3 = computegeorge(sub_model2, flare.time)
-
-
         sub_model3 = sub_model2 - george_model3
         george_model4 = computegeorge(sub_model3, flare.time)
-
         clean_model = george_model2 + george_model + george_model3 + george_model4
+
         self.final_plot = flare.flux - clean_model# plot the new model
         self.period = sf(george_model, 31, 3)
 
 
-        #flare, george_model, sub_model, george_model2, final_plot
-        #plot_final_model(flare, george_model, sub_model, george_model2, self.final_plot)
-
-
-        pl.ylabel("Normalized Flux")
-        # second_reduce.set_xticklabels(flare.time.astype(int))
-        pl.xlabel("Days")
-        pl.plot(flare.time[:250], self.final_plot[:250], color="Black", label='Flux')
-        pl.axhline(y=fd.get_std(flare.flux), color = 'Blue', label='2σ', linestyle = '--')
-        pl.legend(loc='upper right')
-
-        pl.show()
         print("Model complete")
 
 
@@ -276,7 +218,7 @@ class FinalModelSF:
 
     def create_final_model(self, flare):
         # 113,008 points
-        #flare.flux = [flare for flare in flare.flux if flare > -0.5]
+        print ("sd is {}".format(np.std(flare.flux)))
         sf_model = sf(flare.flux, 501, 3)
         self.period = sf(sf_model, 501, 3)
         for i in range(1000):
