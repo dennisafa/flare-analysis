@@ -14,6 +14,7 @@ from celerite import terms
 import copy
 from astropy.io import fits
 from scipy import integrate
+import pandas as pd
 
 
 class strPlot:
@@ -34,7 +35,9 @@ class strPlot:
         model = np.zeros_like([time])
         p = np.reshape(p, (nflares, 3))
         for i in range(nflares):
-            model += ap.aflare1(time, tpeak=p[i, 0], fwhm=p[i, 1], ampl=p[i, 2], upsample=True, uptime=10)
+            model += ap.aflare1(time, tpeak=p[i, 0], fwhm=p[i, 1], ampl=p[i, 2], upsample=False, uptime=10)
+            print('Prev',np.max(model))
+            print(p[i,2])
         return model
 
     def ng_ln_like(self, p, data):
@@ -42,25 +45,21 @@ class strPlot:
         model = self.getmodel(p, data)
         return np.sum((model - y) ** 2)
 
-    def __init__(self, flux, time, range1, range2, model=None): # cleans the list of flux, normalizes to 0
-        self.flux = flux[range1:range2]
-        self.time = time[range1:range2]
-        #self.flux = (self.flux/np.median(self.flux)) - 1
-        #self.flux = [number / scipy.std(self.flux) for number in self.flux]
-        self.time = self.time[np.isfinite(self.flux)]
-        #self.flux = asarray(self.flux)
-        self.flux = self.flux[np.isfinite(self.flux)]
+    def __init__(self, star, range1, range2, model=None): # cleans the list of flux, normalizes to 0
+        sap = star.remove_outliers().remove_nans()
+        self.flux = sap.flux[range1:range2]
+        self.time = sap.time[range1:range2]
+        self.flux = (self.flux / np.median(self.flux))
 
-
-    def guesspeaks(self): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
-        self.detflares = fd.flaredetect(self.flux)
+    def guesspeaks(self, std): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
+        self.detflares = fd.flaredetectpeak(self.flux, std)
         self.flarecount = fd.getlength()
         self.nflares = np.shape(self.detflares)[0]
         self.params = np.zeros([self.nflares, 3])
         for i, flareVal in enumerate(self.detflares):
             self.flarepeak = flareVal
             self.flaretime = self.findfluxtime(self.flarepeak, self.flux, self.time)
-            p = [self.flaretime, 0.0005, self.flarepeak]
+            p = [self.flaretime, self.flarepeak/2, self.flarepeak]
             self.params[i, :] = p
         return np.log(self.params)
 
@@ -85,9 +84,10 @@ class strPlot:
         self.bounds = bounds
         return bounds
 
-def flare_detect(period, flux, time, clean_flux):
-    det_flares = fd.flaredetect(flux)
-    flare_times = findflaretime(det_flares, flux, time)
+def flare_detect(period, flat_flux, clean_flux, orig_flux, time):
+    std = np.std(flare.flux) * 2
+    det_flares = fd.flaredetectpeak(flat_flux, std)
+    flare_times = findflaretime(det_flares, flat_flux, time)
     print(period)
 
     i = 0
@@ -101,39 +101,15 @@ def flare_detect(period, flux, time, clean_flux):
             while flare_times[j] < time[period[i+1]] and j < len(flare_times) - 1:
                 count += 1
                 j += 1
-        i += 1
 
-        energyFlares = np.absolute(integrate.cumtrapz(flux[period[i]:period[i+1]], time[period[i]:period[i+1]], initial=0))
-        print('energy=', energyFlares)
-        pl.plot(energyFlares)
-        pl.xlabel('Energy with flares')
-        pl.show()
-        pl.clf()
-
-        energyNoFlares = np.absolute(integrate.cumtrapz(clean_flux[period[i]:period[i+1]], time[period[i]:period[i+1]], initial=0))
-        pl.plot(time[period[i]:period[i+1]], clean_flux[period[i]:period[i+1]])
-        pl.show()
-        pl.clf()
-
-        pl.plot(energyNoFlares)
-        pl.xlabel('Energy without flares')
-        pl.show()
-        pl.clf()
-
-        pl.plot(time[period[i]:period[i+1]], flux[period[i]:period[i+1]])
-        pl.show()
-        pl.clf()
-        print('Without flares', np.sum(energyNoFlares))
-        print('With flares', np.sum(energyFlares))
-
-        print("period {} had {} flares".format(i, count))
+            print("period {} had {} flares".format(i, count))
         total += count
+        i+=1
     print("avg period is {} days".format(np.average(avg_period)))
     print ("total flare events {}".format(total))
 
 def findflaretime(flarepeak, flux, time): # retrieves the time of the flare
     flare_times = []
-    flux = flux.tolist()
     for i, flare in enumerate(flarepeak):
         t = flux.index(flare)
         flare_times.append(time[t])
@@ -146,9 +122,9 @@ def setbounds(flux):
     for i in range(len(flux)):
         for j in range(2):
             if j < 1:
-                bounds[i][j] = flux[i]
+                bounds[i][j] = flux[i] - (flux[i] ** 1/20 - flux[i])
             else:
-                bounds[i][j] = flux[i] ** 1/6
+                bounds[i][j] = flux[i] ** 1/20
     return bounds
 
 def neg_ln_like(p):
@@ -160,28 +136,67 @@ def grad_neg_ln_like(p):
     return -gp.grad_log_likelihood(f)
 
 def remove_flares(flare):
+    std = np.std(flare.flux) * 2
+    first_model = sub_flare_model(flare, std).flatten()
+    flare_times = flare_start_end(first_model, flare.time, flare.flux)
+    flux_orig = flare.flux
 
-    while len(fd.flaredetect(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
-        tempmodel = sub_flare_model(flare)
-        #sv_gol = sf(flare.flux, 501, 3)
-        #tempmodel += sv_gol
+    while len(fd.flaredetectpeak(flare.flux, std)) > 0:# while flares are still being detected, compute its model and subtract flares
+        tempmodel = sub_flare_model(flare, std)
         flare.flux = flare.flux-tempmodel.flatten()
         print("Flares subtracted!")
 
+
     return flare
 
-def computegeorge (flux, time, sigma):
+
+def flare_start_end(model, time, flux):
+    i = 0
+    duration = []
+
+    while i < len(model):
+        if model[i] > 0.001:
+            start = i-1
+            while model[i] > 0.001 and i < len(model) - 1:
+                print(model[i])
+                i+=1
+            end = i
+            pl.plot(time[start:end], flux[start:end])
+            pl.plot(time[start:end], model[start:end])
+            pl.show()
+            pl.clf()
+            ed = np.abs(np.trapz(flux[start:end], time[start:end] * 86400))
+            duration.append(ed)
+        i+=1
+
+
+    exptime = 1. / 24. / 100. # davenports methods
+    totdur = float(len(time)) * exptime
+    duration = np.sort(duration)[::-1]
+
+    ddx = np.log10(duration)
+    print(ddx)
+    ddy = (np.arange(len(ddx)) + 1) / totdur
+    print(ddy)
+    pl.plot(ddx, ddy, 'o-')
+    pl.yscale('log')
+    pl.ylim(1e-2, 1e2)
+    pl.xlabel('log Equivalent Duration (seconds)')
+    pl.ylabel('Cumulative Flares per Day')
+    pl.show()
+
+
+
+    print(duration)
+
+
+def computegeorge (flux, time):
     global gp
     global f
 
-    bounds = setbounds(flux)
-    print(len(bounds))
-
     f = flux
 
-   # kernel = kernels.CosineKernel(log_period=np.log(2.5)) * kernels.ExpSquaredKernel(metric=0.5)   # a * cos(2pi/T * (t-3082) ) *
-
-    kernel = np.var(flux) * kernels.CosineKernel(log_period=0.36) * kernels.ExpSquaredKernel(metric=0.5)
+    kernel = np.var(flux) * kernels.CosineKernel(log_period=np.log(2.5), axes=0) * kernels.ExpSquaredKernel(metric=0.5)
     gp = george.GP(kernel)
     gp.compute(time, flux)
     #result = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like)
@@ -211,11 +226,13 @@ def detect_period(flux, time):
     period_change = sign_change(dx, time)
     return period_change
 
-def sub_flare_model(flare):
-    guessparams = flare.guesspeaks()  # returns the parameters of where and when each flare occurred
+def sub_flare_model(flare, std):
+    guessparams = flare.guesspeaks(std)  # returns the parameters of where and when each flare occurred
+    print(guessparams)
 
     bounds = flare.setbounds(guessparams)
     fitparams = flare.fit(guessparams, bounds)  # fit the parameters with a minimization process
+    print(fitparams)
     model = flare.getmodel(fitparams, [flare.time, flare.flux,
                                            flare.nflares])
     return model
@@ -232,37 +249,45 @@ def get_period_change(period):
 
 class FinalModelGeorge:
     period = []
-    final_plot = []
+    flat_flux = []
     rotation = []
     clean_flux = []
+    orig_flux = []
+    flux_rotation = []
 
 
     def subtract_flares(self, flare):
 
-        #flare.flux = flare.flux / np.mean(abs(flare.flux))
+
         flux_orig = flare.flux
+
 
         sf_model = sf(flare.flux, 501, 3)
         self.rotation = sf(sf_model, 501, 3)
         for i in range(10):
             self.rotation = sf(self.rotation, 501, 3)
-        self.final_plot = flare.flux - self.rotation
-        flare.flux = self.final_plot
+        self.flat_flux = flare.flux - self.rotation
+        flare.flux = self.flat_flux
 
-        flare = remove_flares(flare)
-        self.clean_flux = flare.flux
-        flare.flux += self.rotation
-        pl.plot(flare.time, flare.flux)
+        #flare.flux = pd.rolling_median(flare.flux, 100, center=True)
+
+        first_model = sub_flare_model(flare, std=np.std(flare.flux) * 2).flatten()
+        pl.plot(flare.time, first_model, linestyle='--', color='Blue')
+        pl.plot(flare.time, flare.flux, color='Black')
+        pl.xlabel('BJD')
+        pl.ylabel('Normalized Flux')
         pl.show()
 
-        self.period = sf(flare.flux, 501, 3)
-        for i in range(2000):
-            self.period = sf(self.period, 501, 3)
-
-        pl.plot(flare.time, self.period, linewidth = 2)
-        #pl.plot(flare.time, flare.flux)
-        pl.show()
-
+        flare_times = flare_start_end(first_model, flare.time, flare.flux)
+        #flare = remove_flares(flare)
+        # flux_rotation = flare.flux + self.rotation
+        # self.clean_flux = [x+1 for x in flare.flux]
+        # self.flat_flux = [x+1 for x in self.flat_flux]
+        # self.orig_flux = flux_orig
+        #
+        # self.period = sf(flux_rotation, 501, 3)
+        # for i in range(2000):
+        #     self.period = sf(self.period, 501, 3)
 
         #self.create_final_model(flare)
 
@@ -272,51 +297,72 @@ class FinalModelGeorge:
     def iter_model(self, flare):
         # 113,008 points
 
-        george_model = computegeorge(flare.flux, flare.time, fd.get_std(flare.flux))  # create an initial model
-        self.final_plot = flare.flux - george_model  # plot the new model
+        flux_temp = flare.flux
 
-        pl.plot(flare.time, flare.flux)
-        pl.plot(flare.time, george_model)
-        pl.show()
+        george_model = computegeorge(flare.flux, flare.time)  # create an initial model
+        self.final_plot = flare.flux - george_model  # plot the new model
 
         flare.flux = self.final_plot
 
-        # sub_model = flux_temp - george_model  # subtract the george model from the raw data
-        # george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
-        # sub_model2 = sub_model - george_model2
-        # george_model3 = computegeorge(sub_model2, flare.time)
-        # sub_model3 = sub_model2 - george_model3
-        # george_model4 = computegeorge(sub_model3, flare.time)
-        # clean_model = george_model2 + george_model + george_model3 + george_model4
+        sub_model = flux_temp - george_model  # subtract the george model from the raw data
+        george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
+        sub_model2 = sub_model - george_model2
+        george_model3 = computegeorge(sub_model2, flare.time)
+        sub_model3 = sub_model2 - george_model3
+        george_model4 = computegeorge(sub_model3, flare.time)
+        clean_model = george_model2 + george_model + george_model3 + george_model4
+        pl.plot(clean_model)
+        pl.show()
+        flare.flux = flare.flux - clean_model
 
-        print("Model complete")
+        return flare
+
+def george_test():
 
 
+    file = np.genfromtxt("248432941.txt", dtype=float, usecols=(0,1), delimiter=',')
+    y = file[:, 1]
+    x = file[:, 0]
 
-    # stars to test george on: 206208968, 201205469, 201885041
-    # testing 206208968 - 4:41 pm
-fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
-flux = fits_file[1].data['flux']
-time = fits_file[1].data['time']
+    gm = computegeorge(y, x)
+    pl.plot(x, gm)
+    pl.show()
+    pl.clf()
 
+    pl.plot(x, y)
+    pl.show()
+    pl.clf()
+
+
+wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
+lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
+
+# fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
+# flux = fits_file[1].data['flux']
+# time = fits_file[1].data['time']
+# pl.plot(flux)
+# pl.show()
 
 
 #fits = KeplerTargetPixelFile('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_02_kasoc-ts_llc_v1.fits')
 
 print("Creating model...")
-flare = strPlot(flux, time, 0, 20000)
+flare = strPlot(lc359, 0, 10000)
 
 get = FinalModelGeorge()
+
+
 get.subtract_flares(flare)
-final_plot = get.final_plot
-period_list = get.period
-period = detect_period(period_list, flare.time)
-flare_detect(period, final_plot, flare.time, get.clean_flux)
-flare.flux = final_plot
+# flat_flux = get.flat_flux
+# clean_flux = get.clean_flux
+# orig_flux = get.orig_flux
+# period_list = get.period
+# period = detect_period(period_list, flare.time)
+# flare_detect(period, flat_flux, clean_flux, flat_flux, flare.time)
+
 
 print("Finished")
 
-    #flare.flare_detect(period)
 
 
 
