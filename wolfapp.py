@@ -36,8 +36,6 @@ class strPlot:
         p = np.reshape(p, (nflares, 3))
         for i in range(nflares):
             model += ap.aflare1(time, tpeak=p[i, 0], fwhm=p[i, 1], ampl=p[i, 2], upsample=False, uptime=10)
-            print('Prev',np.max(model))
-            print(p[i,2])
         return model
 
     def ng_ln_like(self, p, data):
@@ -152,59 +150,62 @@ def remove_flares(flare):
 
 def flare_start_end(model, time, flux):
     i = 0
+    flare_counter = 0
     duration = []
 
     while i < len(model):
         if model[i] > 0.001:
             start = i-1
-            while model[i] > 0.001 and i < len(model) - 1:
-                print(model[i])
+            while model[i] - model[i+1] < 0 and i < len(model) - 1:
                 i+=1
+
+            peak = model[i]
+            i+=1
+            while model[i] > 0.001 and i < len(model) - 1:
+                if model[i] - model[i+1] < 0 and model[i] < peak/2:
+                    break
+                else:
+                    i+=1
+
             end = i
-            pl.plot(time[start:end], flux[start:end])
-            pl.plot(time[start:end], model[start:end])
-            pl.show()
-            pl.clf()
+            flare_counter+=1
+            print('Flare # ', flare_counter)
             ed = np.abs(np.trapz(flux[start:end], time[start:end] * 86400))
             duration.append(ed)
         i+=1
 
 
-    exptime = 1. / 24. / 100. # davenports methods
+
+
+
+    # using the techniques davenport wrote to get energy/plot ED
+
+    days = time[-1] - time[0]
+    exptime = 1. / 24. / days # davenports methods
+
     totdur = float(len(time)) * exptime
     duration = np.sort(duration)[::-1]
 
     ddx = np.log10(duration)
-    print(ddx)
     ddy = (np.arange(len(ddx)) + 1) / totdur
-    print(ddy)
-    pl.plot(ddx, ddy, 'o-')
+    pl.plot(ddx, ddy, 'o-', markersize=3)
     pl.yscale('log')
     pl.ylim(1e-2, 1e2)
     pl.xlabel('log Equivalent Duration (seconds)')
     pl.ylabel('Cumulative Flares per Day')
     pl.show()
 
+    L_m6_most = 10 ** 30.61
+    L_m8_m6 = L_m6_most / 3.
+    E_point = L_m8_m6
 
+    pl.plot(ddx + np.log10(E_point), ddy, 'o-', markersize=3)
+    pl.yscale('log')
+    pl.ylim(1e-2, 1e2)
+    pl.xlabel('log Energy (erg)')
+    pl.ylabel('Cumulative Flares per Day')
+    pl.show()
 
-    print(duration)
-
-
-def computegeorge (flux, time):
-    global gp
-    global f
-
-    f = flux
-
-    kernel = np.var(flux) * kernels.CosineKernel(log_period=np.log(2.5), axes=0) * kernels.ExpSquaredKernel(metric=0.5)
-    gp = george.GP(kernel)
-    gp.compute(time, flux)
-    #result = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like)
-    #gp.set_parameter_vector(result.x)
-    pred_mean, pred_var = gp.predict(flux, time, return_var=True)
-
-    #print(result)
-    return pred_mean
 
 
 def sign_change(model, time): # returns indices where the first derivative changes sign from positive to negative
@@ -228,11 +229,9 @@ def detect_period(flux, time):
 
 def sub_flare_model(flare, std):
     guessparams = flare.guesspeaks(std)  # returns the parameters of where and when each flare occurred
-    print(guessparams)
 
     bounds = flare.setbounds(guessparams)
     fitparams = flare.fit(guessparams, bounds)  # fit the parameters with a minimization process
-    print(fitparams)
     model = flare.getmodel(fitparams, [flare.time, flare.flux,
                                            flare.nflares])
     return model
@@ -294,45 +293,12 @@ class FinalModelGeorge:
         #self.iter_model(flare)
 
 
-    def iter_model(self, flare):
-        # 113,008 points
-
-        flux_temp = flare.flux
-
-        george_model = computegeorge(flare.flux, flare.time)  # create an initial model
-        self.final_plot = flare.flux - george_model  # plot the new model
-
-        flare.flux = self.final_plot
-
-        sub_model = flux_temp - george_model  # subtract the george model from the raw data
-        george_model2 = computegeorge(sub_model, flare.time)  # create a model of the data with george model subbed
-        sub_model2 = sub_model - george_model2
-        george_model3 = computegeorge(sub_model2, flare.time)
-        sub_model3 = sub_model2 - george_model3
-        george_model4 = computegeorge(sub_model3, flare.time)
-        clean_model = george_model2 + george_model + george_model3 + george_model4
-        pl.plot(clean_model)
-        pl.show()
-        flare.flux = flare.flux - clean_model
-
-        return flare
-
 def george_test():
 
 
     file = np.genfromtxt("248432941.txt", dtype=float, usecols=(0,1), delimiter=',')
     y = file[:, 1]
     x = file[:, 0]
-
-    gm = computegeorge(y, x)
-    pl.plot(x, gm)
-    pl.show()
-    pl.clf()
-
-    pl.plot(x, y)
-    pl.show()
-    pl.clf()
-
 
 wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
 lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
@@ -347,7 +313,7 @@ lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
 #fits = KeplerTargetPixelFile('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_02_kasoc-ts_llc_v1.fits')
 
 print("Creating model...")
-flare = strPlot(lc359, 0, 10000)
+flare = strPlot(lc359, 0, len(lc359.flux))
 
 get = FinalModelGeorge()
 
