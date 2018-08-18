@@ -1,11 +1,14 @@
 import numpy as np
-def flaredetectpeak(flux, std):
+def flaredetectpeak(flux, std=None):
     global listFlare
     global firstval
     j = 0
     listFlare = []
 
-    baseval = get_std(flux) * 2 # 2 sigma deviation
+    if std is None:
+        baseval = get_std(flux) * 2 # 2 sigma deviation # 1 sigma for rotation
+    else:
+        baseval = std
     noise = get_noise(flux, baseval)
     while j < len(flux)-1:
         if flux[j] > baseval:
@@ -23,7 +26,7 @@ def flaredetectpeak(flux, std):
                         base = flux[h - 1]  # peak will be point before it rises
                         h -= 1
                     else:
-                        if temp - base > noise*3:
+                        if temp - base > noise:
                             listFlare.append(peak)
                     j += 1
             else:
@@ -34,7 +37,7 @@ def flaredetectpeak(flux, std):
                     base = flux[h - 1] # peak will be point before it rises
                     h -= 1
                 else:
-                    if temp - base > noise*3:
+                    if temp - base > noise:
                         listFlare.append(peak)
                 j += 1
         else:
@@ -74,7 +77,7 @@ def get_noise(flux, baseval):
             noise_check.append(dist)
     return np.average(noise_check)
 
-def flaredetecttime(flare, flux):
+def flaredetecttime(time, flux):
     global listFlare
     global firstval
     j = 0
@@ -99,7 +102,7 @@ def flaredetecttime(flare, flux):
                         h -= 1
                     else:
                         if temp - base > noise:
-                            listFlare.append(j)
+                            listFlare.append(time[j])
                     j += 1
             else:
                 temp = flux[j]
@@ -110,7 +113,7 @@ def flaredetecttime(flare, flux):
                     h -= 1
                 else:
                     if temp - base > noise:
-                        listFlare.append(j)
+                        listFlare.append(time[j])
                 j += 1
         else:
             j += 1

@@ -34,7 +34,7 @@ def aflare(t, p):
     flare : 1-d array
         The flux of the flare model evaluated at each time
     """
-    _fr = [1.00000, 1.94053, -0.175084, -2.24588, -1.12498]
+    _fr = [1.2, 1.94053, -0.175084, -2.24588, -1.12498]
     _fd = [0.689008, -1.60053, 0.302963, -0.278318]
 
     Nflare = int( np.floor( (len(p)/3.0) ) )
