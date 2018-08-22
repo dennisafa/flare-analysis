@@ -1,15 +1,15 @@
 import numpy as np
-def flaredetectpeak(flux, std=None):
+def flaredetectpeak(flux):
     global listFlare
     global firstval
     j = 0
     listFlare = []
 
-    if std is None:
-        baseval = get_std(flux) * 2 # 2 sigma deviation # 1 sigma for rotation
-    else:
-        baseval = std
+    baseval = np.std(flux) * 2 # 2 sigma deviation
+
+    print('Baseval=',baseval)
     noise = get_noise(flux, baseval)
+    print('Noise=', noise)
     while j < len(flux)-1:
         if flux[j] > baseval:
             peak = flux[j]
