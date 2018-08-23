@@ -46,9 +46,10 @@ class Flare:
 
     def __init__(self, flux, time, range1, range2, model=None): # cleans the list of flux, normalizes to 0
         self.flux = flux[range1:range2]
-        self.flux = self.flux[np.logical_not(np.isnan(self.flux))]
-        self.flux = (self.flux-min(self.flux))/(max(self.flux)-min(self.flux))
-        self.time = time[:len(self.flux)]
+        self.time = time[range1:range2]
+        #self.flux = self.flux[np.logical_not(np.isnan(self.flux))]
+        #self.flux = (self.flux-min(self.flux))/(max(self.flux)-min(self.flux))
+       # self.time = time[:len(self.flux)]
         # self.smo = pd.rolling_median(self.flux, 100, center=True)
         # self.flux = (self.flux - self.smo / np.median(self.flux)) + 0.5
         # pl.plot(self.time, self.flux)
@@ -91,7 +92,7 @@ def computegeorge (flux, time):
 
     f = flux
 
-    kernel = kernels.CosineKernel(log_period=np.log(40), axes=0) * kernels.ExpSquaredKernel(metric=0.5)
+    kernel = kernels.CosineKernel(log_period=np.log(40), axes=0) * kernels.ExpSquaredKernel(metric=0.5) + 1
     gp = george.GP(kernel)
     gp.compute(time, flux)
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
@@ -154,18 +155,23 @@ def setbounds(flux):
 '''Flare removal'''
 def remove_flares(flare):
 
+    model = sub_flare_model(flare)
+    pl.plot(flare.time, model.flatten())
+    pl.plot(flare.time, flare.flux)
+    pl.show()
+
     while len(fd.flaredetectpeak(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         flare.flux = flare.flux-tempmodel.flatten()
         print("Flares subtracted!")
     return flare
 
-
+'''Flare modeling and fitting'''
 def sub_flare_model(flare):
 
     guessparams = flare.guesspeaks() # returns the parameters of where and when each flare occurred
-    fitparams = flare.fit(guessparams)
-    model = flare.getmodel(fitparams, [flare.time, flare.flux,
+    #fitparams = flare.fit(guessparams)
+    model = flare.getmodel(guessparams, [flare.time, flare.flux,
                                            flare.nflares])
     return model
 
@@ -222,7 +228,6 @@ class Process:
 
         smo = pd.rolling_median(flare.flux, 100, center=True)
         smo2 = pd.rolling_median(flare.flux - smo, 2, center=True)
-
         flare.flux = smo2
         flare.flux = flare.flux[np.logical_not(np.isnan(flare.flux))]
         flare.time = flare.time[:len(flare.flux)]
@@ -230,6 +235,10 @@ class Process:
         pl.show()
 
         flare_count(flare.flux,flare.time)
+        model = sub_flare_model(flare)
+        pl.plot(flare.time, model.flatten())
+        pl.plot(flare.time, flare.flux)
+        pl.show()
 
         #flare = remove_flares(flare)
 
@@ -263,42 +272,27 @@ def wolf():
 def dipper():
     '''Pixel file dipper star'''
     tpf = KeplerTargetPixelFile.from_archive('248432941')
-
-    tpf.plot(aperture_mask=tpf.pipeline_mask)
+    tpf.remove_outliers()
+    aper = np.zeros(tpf.shape[1:])
+    aper[:, :] = 1
+    lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
+    lc.correct(windows=20, bins=10).bin(20).plot()
     pl.show()
     pl.clf()
 
-    aper = np.zeros(tpf.shape[1:])
-    aper[:, :] = 1
-    tpf.plot(aperture_mask=aper)
-    pl.show()
-    lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
-    flux = lc.flux
-    time = lc.time
-    pl.plot(time, flux)
-    pl.show()
+    for j in range(0, 18, 4):
 
-    # flare = strPlot(y, x, 0, len(y))
-    #
-    #
-    # g = computegeorge(flare.flux, flare.time)
-    # pl.plot(flare.time, flare.flux)
-    # pl.plot(flare.time, g)
-    # pl.show()
-    #
-    # flare.flux -= g
-    # pl.plot(flare.time, flare.flux)
-    # pl.show()
-    # flare = remove_flares(flare)
-    # pl.plot(flare.time, flare.flux)
-    # pl.show()
-    #
-    # flare.flux = pd.rolling_median(flare.flux, 70, center=True)
-    # flare.flux = flare.flux[np.logical_not(np.isnan(flare.flux))]
-    # print(flare.flux)
-    # flare.time = flare.time[:len(flare.flux)]
-    # pl.plot(flare.time, flare.flux)
-    pl.show()
+        for i in range(0, 18, 4):
+            aper = np.zeros(tpf.shape[1:])
+            aper[i:i+4, j:j+4] = 1
+            tpf.plot(aperture_mask=aper)
+            pl.show()
+            lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
+            lc.correct(windows=20, bins=10).bin(20).plot()
+            #pl.ylim(0.9991, 1.0007)
+            pl.show()
+            pl.clf()
+
     '''End pixel file'''
 
 
