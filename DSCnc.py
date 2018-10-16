@@ -16,7 +16,7 @@ from astropy.io import fits
 from scipy import integrate
 import pandas as pd
 from astropy.stats import LombScargle
-import wolf359.wolfapp as master
+import wolf359.wolfrotation as master
 
 
 def computegeorge (flux, time):
@@ -30,11 +30,11 @@ def computegeorge (flux, time):
     gp.compute(time, flux)
     print('Initial log likelihood', gp.log_likelihood(y))
     print('initial parameter vector', gp.get_parameter_vector())
-    res = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like)
-    gp.set_parameter_vector(res.x)
-    print('Final log likelihood', gp.log_likelihood(y))
-    print('final parameter vector', res.x)
-    print(res)
+    # res = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like)
+    # gp.set_parameter_vector(res.x)
+    # print('Final log likelihood', gp.log_likelihood(y))
+    # print('final parameter vector', res.x)
+    # print(res)
 
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
 
@@ -44,7 +44,7 @@ def computegeorge (flux, time):
     pl.plot(time, pred_mean, color='Blue', label='Predicted mean')
     pl.plot(time, flux, alpha=0.6, label='Raw flux')
     pl.ylim(-0.1, 0.8)
-    pl.legend(loc='top right')
+    pl.legend(loc='best')
     pl.xlabel('Time')
     pl.ylabel('Normalized Flux')
     pl.show()
@@ -65,42 +65,31 @@ def grad_neg_ln_like(p):
 #2457949.4982
 
 '''Rotation modeling'''
-# file = np.genfromtxt("211828663.txt", dtype=float, usecols=(0, 1), delimiter=',')
-# y = file[:, 1]
-# x = file[:, 0]
-# print("Creating model...")
-# flare = master.strPlot(y, x, 0, len(y))
-# get = master.FinalModelGeorge()
-# get.subtract_flares(flare)
-# g = computegeorge(flare.flux, flare.time)
-# flat_flux = get.flat_flux
-# clean_flux = get.clean_flux
-# orig_flux = get.orig_flux
-# period_list = get.period
+file = np.genfromtxt("211828663.txt", dtype=float, usecols=(0, 1), delimiter=',')
+y = file[:, 1]
+x = file[:, 0]
+print("Creating model...")
+flare = master.Flare(y, x, 0, len(y))
+y = master.clean(y, x)
+g = computegeorge(y, x)
 
 '''End rotation modeling'''
 
 
 
 '''Flare analysis'''
-tpf = KeplerTargetPixelFile.from_archive('211828663', cadence='short')
-tpf.plot(frame=0)
-print(tpf.pipeline_mask)
-pl.show()
-pl.clf()
-aper = np.zeros(tpf.shape[1:])
-aper[2:6, 3:7] = 1
-tpf.plot(aperture_mask=aper)
-pl.show()
-lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
-lc = lc.remove_nans().remove_outliers()
-flux = lc.flux
-time = lc.time
-
-flare = master.Flare(flux, time, 0, len(flux))
-get = master.Process()
-wl = 8001
-get.subtract_flares(flare, wl)
-
+# tpf = KeplerTargetPixelFile.from_archive('211828663', cadence='short')
+# tpf.plot(frame=0)
+# print(tpf.pipeline_mask)
+# pl.show()
+# pl.clf()
+# aper = np.zeros(tpf.shape[1:])
+# aper[2:6, 3:7] = 1
+# tpf.plot(aperture_mask=aper)
+# pl.show()
+# lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
+# lc = lc.remove_nans().remove_outliers()
+# flux = lc.flux
+# time = lc.time
 '''End flare analysis'''
 

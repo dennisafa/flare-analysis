@@ -16,6 +16,8 @@ from astropy.io import fits
 from scipy import integrate
 import pandas as pd
 from astropy.stats import LombScargle
+from wolf359.base_luminosity import base_lum as lum
+from wolf359.flareenergy import energy_calc
 
 
 class Flare:
@@ -47,9 +49,12 @@ class Flare:
     def __init__(self, flux, time, range1, range2, model=None): # cleans the list of flux, normalizes to 0
         self.flux = flux[range1:range2]
         self.time = time[range1:range2]
-        #self.flux = self.flux[np.logical_not(np.isnan(self.flux))]
-        #self.flux = (self.flux-min(self.flux))/(max(self.flux)-min(self.flux))
-       # self.time = time[:len(self.flux)]
+        # self.flux = self.flux[np.logical_not(np.isnan(self.flux))]
+        #
+        # self.time = time[:len(self.flux)]
+        #
+        # pl.plot(self.time, self.flux)
+        # pl.show()
         # self.smo = pd.rolling_median(self.flux, 100, center=True)
         # self.flux = (self.flux - self.smo / np.median(self.flux)) + 0.5
         # pl.plot(self.time, self.flux)
@@ -206,8 +211,6 @@ def sign_change(model, time): # returns indices where the first derivative chang
     return change_sign
 
 
-
-
 class Process:
     period = []
     flat_flux = []
@@ -219,45 +222,88 @@ class Process:
 
     def subtract_flares(self, flare, wl):
 
-        self.rotation = sf(flare.flux, wl, 3)
-        pl.plot(flare.time, flare.flux)
-        pl.plot(flare.time, self.rotation)
-        pl.show()
-        self.flat_flux = flare.flux - self.rotation
-        flare.flux = self.flat_flux
+        # self.rotation = sf(flare.flux, wl, 3)
+        # self.flat_flux = (flare.flux - self.rotation)
+        # flare.flux -= self.rotation
+        #
+        # pl.plot(flare.time, flare.flux)
+        # pl.show()
+        #
+        #
+        # flare.flux = flare.flux[np.logical_not(np.isnan(flare.flux))]
+        # flare.time = flare.time[:len(flare.flux)]
 
-        smo = pd.rolling_median(flare.flux, 100, center=True)
-        smo2 = pd.rolling_median(flare.flux - smo, 2, center=True)
-        flare.flux = smo2
-        flare.flux = flare.flux[np.logical_not(np.isnan(flare.flux))]
-        flare.time = flare.time[:len(flare.flux)]
-        pl.plot(flare.time, flare.flux)
-        pl.show()
-
-        flare_count(flare.flux,flare.time)
         model = sub_flare_model(flare)
-        pl.plot(flare.time, model.flatten())
-        pl.plot(flare.time, flare.flux)
-        pl.show()
+        # pl.plot(flare.time, model.flatten())
+        # pl.plot(flare.time, flare.flux)
+        # pl.show()
 
-        #flare = remove_flares(flare)
 
-        return flare
+        return energy_calc(model.flatten(), flare.time, flare.flux)
+
 
 
 def wolf():
     ''' Wolf analysis'''
     # wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
     # lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
-    fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
-    flux = fits_file[1].data['flux']
-    time = fits_file[1].data['time']
-    print("Creating model...")
-    flare = Flare(flux, time, 3000, 4000)
-    pl.plot(flare.time, flare.flux)
+    # fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
+    file = np.genfromtxt("/Users/Dennis/Desktop/newwolfdata/tweaked_SC_timeseries.txt", dtype=float, usecols=(0, 2),
+                         delimiter=' ')
+    y = file[:, 1]
+    x = file[:, 0]
+    y = y[np.logical_not(np.isnan(y))]
+    x = x[:len(y)]
+    y = (y - np.min(y)) / (np.max(y) - np.min(y))
+
+    pl.plot(x, y)
     pl.show()
-    get = Process()
-    get.subtract_flares(flare, 801)
+    flux = y
+    time = x
+    print("Creating model...")
+
+
+    duration = []
+    time_end = 0
+    points_lost = 0
+    for i in range(0, 5000, 1000):
+        flare = Flare(flux,time, i, i+1000)
+        pl.plot(flare.time, flare.flux)
+        get = Process()
+        if len(flare.flux) < 301:
+            continue
+        duration += get.subtract_flares(flare, 101)
+        time_end = flare.time[-1]
+
+
+    #print(duration)
+
+    exptime = 1. / 24. / 80.
+
+    totdur = float(len(time)) * exptime
+    duration = np.sort(duration)[::-1]
+
+    ddx = np.log10(duration)
+    ddy = (np.arange(len(ddx))) / totdur
+    pl.plot(ddx, ddy, 'o-', markersize=3, alpha=0.5)
+    pl.yscale('log')
+    pl.ylim(1e-2, 1e2)
+    pl.xlabel('log Equivalent Duration (seconds)')
+    pl.ylabel('Cumulative Flares per Day')
+    pl.show()
+    pl.clf()
+
+    E_point = lum(12.840, 2, 4000)
+    print(E_point)
+    print(ddx)
+
+    pl.plot(ddx + E_point, ddy, 'o-', markersize=4, alpha=0.5)
+    pl.yscale('log')
+    pl.ylim(1e-2, 1e2)
+    pl.xlabel('log Flare Energy (erg)')
+    pl.ylabel('Cumulative Flares per Day')
+    pl.show()
+
     # flat_flux = get.flat_flux
     # clean_flux = get.clean_flux
     # orig_flux = get.orig_flux
@@ -289,10 +335,20 @@ def dipper():
             pl.show()
             lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
             lc.correct(windows=20, bins=10).bin(20).plot()
-            #pl.ylim(0.9991, 1.0007)
+            pl.ylim(0.9991, 1.0007)
             pl.show()
             pl.clf()
 
     '''End pixel file'''
 
+# fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
+# flux = fits_file[1].data['flux_raw']
+# time = fits_file[1].data['time']
+#
+# print(flux[:500])
+#
+#
+# pl.plot(time, flux)
+#
+# pl.show()
 
