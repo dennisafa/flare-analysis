@@ -7,13 +7,40 @@ import george
 from george import kernels
 from scipy.optimize import minimize
 
-tpf = KeplerTargetPixelFile.from_archive('211931651', campaign=16)
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+from matplotlib import pyplot as plt
+from gatspy.periodic import LombScargleFast
+
+
+from sklearn import linear_model
+from sklearn import preprocessing
+from sklearn.base import BaseEstimator
+from sklearn.model_selection import KFold, GridSearchCV
+
+from wolf359.aflare import aflare1
+from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
+from scipy.integrate import simps
+
+tpf = KeplerTargetPixelFile.from_archive('211817361', campaign=16)
+tpf.plot(frame=6)
+pl.show()
+pl.clf()
 aper = np.zeros(tpf.shape[1:])
-aper[1:5, 1:5] = 1
+aper[1:6, 2:7] = 1
 lc = tpf.to_lightcurve(aperture_mask=aper.astype(bool))
-lc = lc.remove_nans().remove_outliers()
+lc = lc.remove_nans().remove_outliers().normalize().flatten()
+tpf.plot(aperture_mask=aper)
+pl.show()
 y = lc.flux
 x = lc.time
+pl.plot(x, y)
+pl.show()
+
 
 def computegeorge (flux, time):
     global gp
@@ -34,8 +61,8 @@ def computegeorge (flux, time):
 
     pred_mean, pred_var = gp.predict(flux, time, return_var=True)
 
-    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
-                    label='Predicted variance')
+    # pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+    #                 label='Predicted variance')
     # pl.fill_between(time, flux - np.sqrt(gp._yerr2), flux + np.sqrt(gp._yerr2), color='k')
     pl.plot(time, pred_mean, color='Blue', label='Predicted mean')
     pl.plot(time, flux, alpha=0.6, label='Raw flux')
@@ -61,22 +88,28 @@ def grad_neg_ln_like(p):
 
 #2457949.4982
 
-'''Rotation modeling'''
-# flare = master.Flare(y, x, 0, len(y))
-# y = master.clean(y, x)
-# g = computegeorge(y, x)
+# '''Rotation modeling'''
+flare = master.Flare(y, x, 0, len(y))
+#y = master.removeRotation(flare.flux, flare.time)
+pl.plot(x, y)
+pl.show()
+# g = computegeorge(flare.flux, flare.time)
+
+
+
 '''End rotation modeling'''
 
 
 
 '''Flare analysis'''
 
-flare = master.flatten(y, x)
-pl.plot(flare.time, flare.flux)
-pl.show()
-
-pl.plot(x, master.sub_flare_model(flare).flatten())
-pl.plot(x, flare.flux)
-pl.xlim(3270, 3290)
-pl.show()
+# flare = master.flatten(y, x)
+# pl.plot(flare.time, flare.flux)
+# pl.show()
+#
+# pl.plot(x, master.sub_flare_model(flare).flatten())
+# pl.plot(x, flare.flux)
+# pl.xlim(3270, 3290)
+# pl.show()
 # '''End flare analysis'''
+

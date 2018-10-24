@@ -219,7 +219,7 @@ def run (flux, time):
     #
     #
 
-def clean (flux, time):
+def cleanGeorgeModel (flux, time):
     flare = Flare(flux, time, 0, len(flux))
 
     sav_gol_model = sf(flare.flux, 101, 3)
@@ -228,3 +228,10 @@ def clean (flux, time):
     flare.flux += sav_gol_model
 
     return flare.flux# now compute the GP with flares removed
+
+def removeRotation (flux, time):
+    flare = Flare(flux, time, 0, len(flux))
+
+    sav_gol_model = sf(flare.flux, 101, 3)
+    flare.flux -= sav_gol_model
+    return flare.flux
