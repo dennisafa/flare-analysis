@@ -22,12 +22,16 @@ def energy_calc(model, time, flux):
             end = i
 
             flare_counter+=1
+            model[start:end] += np.median(flux)
             ed = np.trapz(flux[start:end], time[start:end] * 86400)
-            # pl.plot(model[start:end])
-            # pl.show()
-            # pl.clf()
             duration.append(ed)
             i+=1
         i+=1
+
+   # model += np.median(flux)
+   #  pl.plot(time, model)
+   #  pl.plot(time, flux)
+   #  pl.show()
+   #  pl.clf()
     # using the techniques davenport wrote to get energy/plot ED
     return duration

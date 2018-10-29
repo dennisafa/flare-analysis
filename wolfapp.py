@@ -76,8 +76,12 @@ class Flare:
 
 
     def fit(self, p):
-        result = minimize(self.ng_ln_like, p, args=[self.time, self.flux, self.nflares], method='L-BFGS-B')
-        return result.x
+        if self.nflares != 0:
+            result = minimize(self.ng_ln_like, p, args=[self.time, self.flux, self.nflares], method='L-BFGS-B')
+            return result.x
+
+        else:
+            return p
 
 
     def setbounds (self, p):
@@ -150,7 +154,7 @@ def flares_per_period(flare_times, period, time):
 '''Bounds for minimization'''
 def setbounds(flux):
     flux = asarray(flux).ravel()
-    bounds = np.zeros([len(flux),2])
+    bounds = np.zeros([len(flux), 2])
     for i in range(len(flux)):
         for j in range(2):
             if j < 1:
@@ -214,32 +218,12 @@ def sign_change(model, time): # returns indices where the first derivative chang
 
 
 class Process:
-    period = []
-    flat_flux = []
-    rotation = []
-    clean_flux = []
-    orig_flux = []
-    flux_rotation = []
-
+    count = 0
 
     def subtract_flares(self, flare, wl):
 
-        # self.rotation = sf(flare.flux, wl, 3)
-        # self.flat_flux = (flare.flux - self.rotation)
-        # flare.flux -= self.rotation
-        #
-        # pl.plot(flare.time, flare.flux)
-        # pl.show()
-        #
-        #
-        # flare.flux = flare.flux[np.logical_not(np.isnan(flare.flux))]
-        # flare.time = flare.time[:len(flare.flux)]
-
         model = sub_flare_model(flare)
-        # pl.plot(flare.time, model.flatten())
-        # pl.plot(flare.time, flare.flux)
-        # pl.show()
-
+        self.count += flare.nflares
 
         return energy_calc(model.flatten(), flare.time, flare.flux)
 
@@ -247,90 +231,67 @@ class Process:
 
 def wolf():
     ''' Wolf analysis'''
-    wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
-    lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
-    # fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
-    file = np.genfromtxt("/Users/Dennis/Desktop/newwolfdata/tweaked_SC_timeseries.txt", dtype=float, usecols=(0, 2),
+    #wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
+    #lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
+    fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
+    file = np.genfromtxt("/Users/Dennis/Desktop/newwolfdata/tweaked_SC_timeseries.txt", dtype=float, usecols=(0, 1),
                          delimiter=' ')
 
-    pl.plot(lc359.time, lc359.flux)
+    y = file[:, 1]
+    x = file[:, 0]
+
+
+
+    y = y[np.logical_not(np.isnan(y))]
+    y = [p for p in y if p > 370000] # Lot of systematic errors below this threshold (should change for other LC's)
+    x = x[:len(y)]
+    flux = y
+    time = x
+    pl.plot(flux)
     pl.show()
 
+    print("Creating model...")
 
-    smoothed2 = gausFilter.gaussian_filter1d(lc359.flux, 20)
-    pl.plot(smoothed2[:400])
-    pl.plot(lc359.flux[:400])
+    num_flares = 0
+    duration = []
+    for i in range(0, len(flux), 1000):
+        flare = Flare(flux, time, i, i + 1000)
+        smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 60)
+        flare.flux = (flare.flux - smoothed2) / np.median(flare.flux)
+
+        get = Process()
+        duration += get.subtract_flares(flare, 101)
+        get.count += num_flares
+
+
+    #print(duration)
+    print(num_flares)
+
+    exptime = 1. / 24. / 80.
+
+    totdur = float(len(time)) * exptime
+    duration = np.sort(duration)[::-1]
+
+    ddx = np.log10(duration)
+    ddy = (np.arange(len(ddx))) / totdur
+    pl.plot(ddx, ddy, 'o', markersize=3, alpha=0.5)
+    pl.yscale('log')
+    pl.ylim(1e-3, 1e3)
+    pl.xlabel('log Equivalent Duration (seconds)')
+    pl.ylabel('Cumulative Flares per Day')
     pl.show()
+    pl.clf()
 
-    finalPlot = (lc359.flux - smoothed2) / np.median(lc359.flux)
-    flare_count(finalPlot, lc359.time)
+    E_point = lum(12.840, 2.4, 4000)
+    print(E_point)
+    print(ddx)
 
-    for i in range(0, 10000, 1000):
-        f1 = Flare(finalPlot, lc359.time, i, i+1000)
-        model = sub_flare_model(f1)
-        print(len(model.flatten()))
-        if (len(model.flatten()) > 0):
-            pl.plot(lc359.time[i:i+1000], finalPlot[i:i+1000])
-            pl.plot(lc359.time[i:i+1000], model[i:i+1000].flatten())
-            pl.show()
-            pl.clf()
-        # pl.plot(lc359.time[i:i+1000], lc359.flux[i:i+1000])
-        # pl.show()
-        # pl.clf()
-
-    # y = file[:, 1]
-    # x = file[:, 0]
-    # y = y[np.logical_not(np.isnan(y))]
-    # x = x[:len(y)]
-    # y = (y - np.min(y)) / (np.max(y) - np.min(y))
-    #
-    # pl.plot(x, y)
-    # pl.show()
-    # flux = y
-    # time = x
-    # print("Creating model...")
-
-
-    # duration = []
-    # time_end = 0
-    # points_lost = 0
-    # for i in range(0, 50000, 1000):
-    #     flare = Flare(finalPlot,lc359.time, i, i+1000)
-    #     get = Process()
-    #     duration += get.subtract_flares(flare, 101)
-    #     time_end = flare.time[-1]
-    #
-    #
-    # #print(duration)
-    #
-    # exptime = 1. / 24. / 80.
-    #
-    # pl.plot(np.log10(duration))
-    # pl.show()
-    #
-    # totdur = float(len(lc359.time)) * exptime
-    # duration = np.sort(duration)[::-1]
-    #
-    # ddx = np.log10(duration)
-    # ddy = (np.arange(len(ddx))) / totdur
-    # pl.plot(ddx, ddy, 'o', markersize=3, alpha=0.5)
-    # pl.yscale('log')
-    # pl.ylim(1e-2, 1e2)
-    # pl.xlabel('log Equivalent Duration (seconds)')
-    # pl.ylabel('Cumulative Flares per Day')
-    # pl.show()
-    # pl.clf()
-    #
-    # E_point = lum(12.840, 2, 4000)
-    # print(E_point)
-    # print(ddx)
-    #
-    # pl.plot(ddx + E_point, ddy, 'o', markersize=4, alpha=0.5)
-    # pl.yscale('log')
-    # pl.ylim(1e-2, 1e2)
-    # pl.xlabel('log Flare Energy (erg)')
-    # pl.ylabel('Cumulative Flares per Day')
-    # pl.show()
+    pl.plot(ddx + E_point, ddy, 'o', markersize=4, alpha=0.5)
+    pl.yscale('log')
+    pl.ylim(1e-3, 1e3)
+    pl.xlabel('log Flare Energy (erg)')
+    pl.ylabel('Cumulative Flares per Day')
+    pl.show()
 
     # flat_flux = get.flat_flux
     # clean_flux = get.clean_flux
