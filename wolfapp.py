@@ -167,20 +167,20 @@ def setbounds(flux):
 def remove_flares(flare):
 
     model = sub_flare_model(flare)
-    pl.plot(flare.time, model.flatten())
-    pl.plot(flare.time, flare.flux)
-    pl.show()
+    # pl.plot(flare.time, model.flatten())
+    # pl.plot(flare.time, flare.flux)
+    # pl.show()
 
     while len(fd.flaredetectpeak(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
         tempmodel = sub_flare_model(flare)
         flare.flux = flare.flux-tempmodel.flatten()
-        print("Flares subtracted!")
+        print("Flare(s) subtracted")
     return flare
 
 '''Flare modeling and fitting'''
-def sub_flare_model(flare):
+def sub_flare_model(flare, std):
 
-    guessparams = flare.guesspeaks() # returns the parameters of where and when each flare occurred
+    guessparams = flare.guesspeaks(std) # returns the parameters of where and when each flare occurred
     fitparams = flare.fit(guessparams)
     model = flare.getmodel(fitparams, [flare.time, flare.flux,
                                            flare.nflares])
@@ -220,9 +220,20 @@ def sign_change(model, time): # returns indices where the first derivative chang
 class Process:
     count = 0
 
-    def subtract_flares(self, flare, wl):
+    def subtract_flares(self, flare, std):
 
-        model = sub_flare_model(flare)
+        model = sub_flare_model(flare, std)
+        start = 2100
+        stop = 2400
+        # pl.plot(flare.time[start:stop], model.flatten()[start:stop], 'k--', label = 'Flare model')
+        # pl.plot(flare.time[start:stop], flare.flux[start:stop], alpha=0.5, label = 'Flattened Flux')
+        # pl.xlabel('Barycentric Julian Date')
+        # pl.ylabel('Flux')
+        # pl.legend(loc='best')
+        # pl.show()
+        # pl.clf()
+
+
         self.count += flare.nflares
 
         return energy_calc(model.flatten(), flare.time, flare.flux)
@@ -233,9 +244,8 @@ def wolf():
     ''' Wolf analysis'''
     #wolf = KeplerTargetPixelFile.from_archive('201885041', cadence='short')
     #lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
-    fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
-    file = np.genfromtxt("/Users/Dennis/Desktop/newwolfdata/tweaked_SC_timeseries.txt", dtype=float, usecols=(0, 1),
-                         delimiter=' ')
+    #fits_file = fits.open('/Users/Dennis/Desktop/newwolfdata/files/ktwo201885041_01_kasoc-ts_slc_v1.fits')
+    file = np.genfromtxt("/Users/Dennis/Desktop/newwolfdata/tweaked_SC_timeseries.txt", dtype=float, usecols=(0, 1), delimiter=' ')
 
     y = file[:, 1]
     x = file[:, 0]
@@ -250,22 +260,44 @@ def wolf():
     pl.plot(flux)
     pl.show()
 
+    flare = Flare(flux, time, 0, len(flux))
+    smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 120)
+    flare.flux = (flare.flux - smoothed2) / np.median(flare.flux)
+    stdAll = np.std(flare.flux) * 2
+
     print("Creating model...")
 
     num_flares = 0
     duration = []
-    for i in range(0, len(flux), 1000):
-        flare = Flare(flux, time, i, i + 1000)
-        smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 60)
+    for i in range(0, len(flux), 4000):
+        flare = Flare(flux, time, i, i + 4000)
+        smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 120)
+        # pl.plot(flare.time, smoothed2, 'k--', label='1D Gaussian Filter')
+        # pl.plot(flare.time, flare.flux, alpha = 0.5, label='Raw Flux')
+        # pl.xlabel('Barycentric Julian Date')
+        # pl.ylabel('Flux')
+        # pl.legend(loc='best')
+        # pl.show()
+        # pl.clf()
         flare.flux = (flare.flux - smoothed2) / np.median(flare.flux)
 
+        # pl.plot(flare.time, flare.flux, 'k', label='Flattened Flux')
+        # pl.xlabel('Barycentric Julian Date')
+        # pl.ylabel('Flux')
+        # pl.legend(loc='best')
+        # pl.show()
+        # pl.clf()
+
+
         get = Process()
-        duration += get.subtract_flares(flare, 101)
-        get.count += num_flares
+        duration += get.subtract_flares(flare, stdAll)
+        num_flares += get.count
+
+        print(i)
 
 
     #print(duration)
-    print(num_flares)
+    print("Number of flares = {}".format(num_flares))
 
     exptime = 1. / 24. / 80.
 
@@ -274,9 +306,9 @@ def wolf():
 
     ddx = np.log10(duration)
     ddy = (np.arange(len(ddx))) / totdur
-    pl.plot(ddx, ddy, 'o', markersize=3, alpha=0.5)
+    pl.plot(ddx, ddy, 'o--', markersize=2, alpha=0.5)
     pl.yscale('log')
-    pl.ylim(1e-3, 1e3)
+    #pl.ylim(1e-3, 1e3)
     pl.xlabel('log Equivalent Duration (seconds)')
     pl.ylabel('Cumulative Flares per Day')
     pl.show()
@@ -286,9 +318,9 @@ def wolf():
     print(E_point)
     print(ddx)
 
-    pl.plot(ddx + E_point, ddy, 'o', markersize=4, alpha=0.5)
+    pl.plot(ddx + E_point, ddy, 'o--', markersize=2, alpha=0.5)
     pl.yscale('log')
-    pl.ylim(1e-3, 1e3)
+    #pl.ylim(1e-3, 1e3)
     pl.xlabel('log Flare Energy (erg)')
     pl.ylabel('Cumulative Flares per Day')
     pl.show()
