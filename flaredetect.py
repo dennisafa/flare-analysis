@@ -1,11 +1,11 @@
 import numpy as np
-def flaredetectpeak(flux, std):
+def flaredetectpeak(flux):
     global listFlare
     global firstval
     j = 0
     listFlare = []
 
-    baseval = std
+    baseval = np.std(flux)
     noise = get_noise(flux, baseval)
 
     while j < len(flux)-1:

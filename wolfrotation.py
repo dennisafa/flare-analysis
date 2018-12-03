@@ -10,7 +10,7 @@ from astropy.io import fits
 from scipy.signal import savgol_filter as sf
 from scipy.optimize import minimize
 from numpy import asarray
-
+import emcee
 
 class Flare:
     flux = []
@@ -25,7 +25,7 @@ class Flare:
         self.time = flare.time[:len(self.flux)]
 
 
-    def guesspeaks(self, std): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
+    def guesspeaks(self): # gathers the peaks in the set of data, then returns a list of flare times, peaks, and fwhm
         self.detflares = fd.flaredetectpeak(self.flux)
         self.flarecount = fd.getlength()
         self.nflares = np.shape(self.detflares)[0]
@@ -55,6 +55,17 @@ class Flare:
         return model
 
 
+
+def lnprob(p):
+    # Trivial uniform prior.
+    if np.any((-100 > p[1:]) + (p[1:] > 100)):
+        return -np.inf
+
+    # Update the kernel and compute the lnlikelihood.
+    gp.set_parameter_vector(p)
+    return gp.log_likelihood(y, quiet=True)
+
+
 '''George modeling'''
 def computegeorge (flux, time):
     global gp
@@ -63,8 +74,8 @@ def computegeorge (flux, time):
     y = flux
     x = time
 
-    kernel = kernels.CosineKernel(log_period=np.log(400), axes=0) + kernels.ExpSquaredKernel(metric=0.5)
-    gp = george.GP(kernel, mean=np.mean(y), fit_mean=True, white_noise=0.00000001, fit_white_noise=True)
+    kernel = kernels.CosineKernel(log_period=np.log(3), axes=0) + kernels.ExpSquaredKernel(metric=0.5)
+    gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
     gp.compute(x, y)
     print('Bounds', gp.get_parameter_bounds())
     print(gp.log_prior())
@@ -76,30 +87,69 @@ def computegeorge (flux, time):
     print('final parameter vector', res.x)
     print(res)
 
-    pred_mean, pred_var = gp.predict(y, x, return_var=True)
+    '''Emcee sampling'''
+    nwalkers, ndim = 36, len(gp)
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
 
-    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
-                    label='Predicted variance')
+    # Initialize the walkers.
+    p0 = gp.get_parameter_vector() + 1e-4 * np.random.randn(nwalkers, ndim)
 
-    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
-    pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    #pl.ylim(-0.1, 0.5)
-    pl.legend(loc='best')
+    print("Running burn-in")
+    p0, _, _ = sampler.run_mcmc(p0, 200)
+
+    print("Running production chain")
+    sampler.run_mcmc(p0, 200)
+    print(sampler.flatchain[0][1])
+
+
+    import matplotlib.pyplot as pl
+
+
+    for i in range(ndim):
+        pl.figure()
+        pl.hist(sampler.flatchain[:, i], 100, color="k", histtype="step")
+
     pl.show()
-    pl.clf()
 
 
-    x = np.linspace(max(x), 3120, 3095)
-    mu, var = gp.predict(flare.flux, x, return_var=True)
+    for i in range(50):
+        # Choose a random walker and step.
+        w = np.random.randint(sampler.chain.shape[0])
+        n = np.random.randint(sampler.chain.shape[1])
+        gp.set_parameter_vector(sampler.chain[w, n])
+        pl.plot(x, gp.sample_conditional(y, x))
 
-    std = np.sqrt(var)
-
-    pl.plot(time, y, color="Blue")
-    pl.fill_between(x, mu + std, mu - std, color="k", alpha=0.5)
-
-    pl.xlim(min(time), 3180)
 
     pl.show()
+
+
+
+    '''End emcee'''
+
+    # pred_mean, pred_var = gp.predict(y, x, return_var=True)
+    #
+    # pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+    #                 label='Predicted variance')
+    #
+    # pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
+    # pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
+    # #pl.ylim(-0.1, 0.5)
+    # pl.legend(loc='best')
+    # pl.show()
+    # pl.clf()
+
+
+    # x = np.linspace(max(x), 3120, 3095)
+    # mu, var = gp.predict(flare.flux, x, return_var=True)
+    #
+    # std = np.sqrt(var)
+    #
+    # pl.plot(time, y, color="Blue")
+    # pl.fill_between(x, mu + std, mu - std, color="k", alpha=0.5)
+    #
+    # pl.xlim(min(time), 3180)
+    #
+    # pl.show()
 
 
     # print(result)
@@ -131,7 +181,7 @@ def remove_flares(flare):
 
 
     while len(fd.flaredetectpeak(flare.flux)) > 0:# while flares are still being detected, compute its model and subtract flares
-        tempmodel = sub_flare_model(flare, std=None)
+        tempmodel = sub_flare_model(flare)
         flare.flux = flare.flux-tempmodel.flatten()
 
         print("Flares subtracted!")
@@ -140,8 +190,8 @@ def remove_flares(flare):
     return flare
 
 
-def sub_flare_model(flare, std):
-    guessparams = flare.guesspeaks(std)
+def sub_flare_model(flare):
+    guessparams = flare.guesspeaks()
     model = flare.getmodel(guessparams, [flare.time, flare.flux,
                                          flare.nflares])
     return model
@@ -220,7 +270,7 @@ lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
 
 
 #flare = Flare(lc359, 0, len(lc359.flux))
-flare = Flare(lc359, 2500, len(lc359.flux))
+flare = Flare(lc359, 2100, 2500)
 
 sav_gol_model = sf(flare.flux, 101, 3)
 flare.flux -= sav_gol_model

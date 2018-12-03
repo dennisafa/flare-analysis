@@ -178,9 +178,9 @@ def remove_flares(flare):
     return flare
 
 '''Flare modeling and fitting'''
-def sub_flare_model(flare, std):
+def sub_flare_model(flare):
 
-    guessparams = flare.guesspeaks(std) # returns the parameters of where and when each flare occurred
+    guessparams = flare.guesspeaks() # returns the parameters of where and when each flare occurred
     fitparams = flare.fit(guessparams)
     model = flare.getmodel(fitparams, [flare.time, flare.flux,
                                            flare.nflares])
@@ -220,18 +220,17 @@ def sign_change(model, time): # returns indices where the first derivative chang
 class Process:
     count = 0
 
-    def subtract_flares(self, flare, std):
+    def subtract_flares(self, flare):
 
-        model = sub_flare_model(flare, std)
-        start = 2100
-        stop = 2400
-        # pl.plot(flare.time[start:stop], model.flatten()[start:stop], 'k--', label = 'Flare model')
-        # pl.plot(flare.time[start:stop], flare.flux[start:stop], alpha=0.5, label = 'Flattened Flux')
-        # pl.xlabel('Barycentric Julian Date')
-        # pl.ylabel('Flux')
-        # pl.legend(loc='best')
-        # pl.show()
-        # pl.clf()
+        model = sub_flare_model(flare)
+
+        pl.plot(flare.time, model.flatten(), 'k--', label = 'Flare model')
+        pl.plot(flare.time, flare.flux, alpha=0.5, label = 'Flattened Flux')
+        pl.xlabel('Barycentric Julian Date')
+        pl.ylabel('Flux')
+        pl.legend(loc='best')
+        pl.show()
+        pl.clf()
 
 
         self.count += flare.nflares
@@ -260,11 +259,6 @@ def wolf():
     pl.plot(flux)
     pl.show()
 
-    flare = Flare(flux, time, 0, len(flux))
-    smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 120)
-    flare.flux = (flare.flux - smoothed2) / np.median(flare.flux)
-    stdAll = np.std(flare.flux) * 2
-
     print("Creating model...")
 
     num_flares = 0
@@ -290,7 +284,7 @@ def wolf():
 
 
         get = Process()
-        duration += get.subtract_flares(flare, stdAll)
+        duration += get.subtract_flares(flare)
         num_flares += get.count
 
         print(i)
@@ -308,7 +302,6 @@ def wolf():
     ddy = (np.arange(len(ddx))) / totdur
     pl.plot(ddx, ddy, 'o--', markersize=2, alpha=0.5)
     pl.yscale('log')
-    #pl.ylim(1e-3, 1e3)
     pl.xlabel('log Equivalent Duration (seconds)')
     pl.ylabel('Cumulative Flares per Day')
     pl.show()
