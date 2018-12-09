@@ -3,7 +3,7 @@ from george import kernels
 import numpy as np
 from lightkurve import KeplerTargetPixelFile
 import matplotlib.pyplot as pl
-from appaloosa import aflare as ap
+import wolf359.aflare as ap
 import wolf359.flaredetect as fd
 import pandas as pd
 from astropy.io import fits
@@ -95,19 +95,15 @@ def computegeorge (flux, time):
     p0 = gp.get_parameter_vector() + 1e-4 * np.random.randn(nwalkers, ndim)
 
     print("Running burn-in")
-    p0, _, _ = sampler.run_mcmc(p0, 200)
+    p0, _, _ = sampler.run_mcmc(p0, 100)
 
     print("Running production chain")
-    sampler.run_mcmc(p0, 200)
+    sampler.run_mcmc(p0, 100)
     print(sampler.flatchain[0][1])
-
-
-    import matplotlib.pyplot as pl
-
 
     for i in range(ndim):
         pl.figure()
-        pl.hist(sampler.flatchain[:, i], 100, color="k", histtype="step")
+        pl.hist(sampler.flatchain[0, i], 100, color="k", histtype="step")
 
     pl.show()
 
@@ -126,17 +122,17 @@ def computegeorge (flux, time):
 
     '''End emcee'''
 
-    # pred_mean, pred_var = gp.predict(y, x, return_var=True)
-    #
-    # pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
-    #                 label='Predicted variance')
-    #
-    # pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
-    # pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    # #pl.ylim(-0.1, 0.5)
-    # pl.legend(loc='best')
-    # pl.show()
-    # pl.clf()
+    pred_mean, pred_var = gp.predict(y, x, return_var=True)
+
+    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+                    label='Predicted variance')
+
+    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
+    pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
+    #pl.ylim(-0.1, 0.5)
+    pl.legend(loc='best')
+    pl.show()
+    pl.clf()
 
 
     # x = np.linspace(max(x), 3120, 3095)
@@ -153,7 +149,6 @@ def computegeorge (flux, time):
 
 
     # print(result)
-    return pred_mean
 
 def neg_ln_like(p):
     gp.set_parameter_vector(p)

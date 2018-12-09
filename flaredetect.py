@@ -5,7 +5,7 @@ def flaredetectpeak(flux):
     j = 0
     listFlare = []
 
-    baseval = np.std(flux)
+    baseval = np.std(flux) * 2
     noise = get_noise(flux, baseval)
 
     while j < len(flux)-1:
