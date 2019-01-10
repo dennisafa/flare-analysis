@@ -22,10 +22,14 @@ def energy_calc(model, time, flux):
             end = i
 
             flare_counter+=1
-            model[start:end] += np.median(flux)
+            #model[start:end] += np.median(flux)
             ed = np.trapz(flux[start:end], time[start:end] * 86400)
             duration.append(ed)
             i+=1
+            pl.plot(time[start-100:end+100], model[start-100:end+100])
+            pl.plot(time[start-100:end+100], flux[start-100:end+100])
+            pl.show()
+            pl.clf()
         i+=1
 
    # model += np.median(flux)

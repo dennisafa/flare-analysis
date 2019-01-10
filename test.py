@@ -89,11 +89,11 @@ def computegeorge (flux, time):
     print(gp.log_prior())
     print('Initial log likelihood', gp.log_likelihood(y))
     print('initial parameter vector', gp.get_parameter_vector())
-    res = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like, method="L-BFGS-B")
-    gp.set_parameter_vector(res.x)
-    print('Final log likelihood', gp.log_likelihood(y))
-    print('final parameter vector', res.x)
-    print(res)
+    #res = minimize(neg_ln_like, gp.get_parameter_vector(), jac=grad_neg_ln_like, method="L-BFGS-B")
+    #gp.set_parameter_vector(res.x)
+    #print('Final log likelihood', gp.log_likelihood(y))
+   # print('final parameter vector', res.x)
+    #print(res)
 
     '''Emcee sampling'''
     # nwalkers, ndim = 36, len(gp)
@@ -137,7 +137,23 @@ def computegeorge (flux, time):
 
     pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
     pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    #pl.ylim(-0.1, 0.5)
+    pl.ylim(0.0, 1)
+    pl.ylabel("Relative Flux")
+    pl.xlabel("BJD")
+    pl.legend(loc='best')
+    pl.show()
+    pl.clf()
+
+    #pred_mean, pred_var = gp.predict(y, x, return_var=True)
+
+    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+                    label='Predicted variance')
+
+    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
+    # pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
+    pl.ylim(0.0, 1)
+    pl.ylabel("Relative Flux")
+    pl.xlabel("BJD")
     pl.legend(loc='best')
     pl.show()
     pl.clf()
@@ -252,7 +268,7 @@ def running_sum(list, window):
 
 
 print("Creating model...")
-fits_file = fits.open('/Users/Dennis/Desktop/Au Mic B/tess2018206045859-s0001-0000000441420236-0120-s_lc.fits')
+fits_file = fits.open('/Users/Dennis/Desktop/AuMicB/tess2018206045859-s0001-0000000441420236-0120-s_lc.fits')
 
 
 y = fits_file[1].data.field("PDCSAP_FLUX")[:]
@@ -267,18 +283,42 @@ flare = Flare(x, y, 0, len(y))
 
 
 g = computegeorge(flare.flux, flare.time)
+# pl.plot(flare.time, g, label='George model')
 
-sav_gol_model = sf(flare.flux, 501, 3)
-pl.plot(flare.time, sav_gol_model)
-pl.plot(flare.time, flare.flux)
+flare.flux -= g # or sav gol model
+# flare.flux = [p for p in flare.flux if p < 0.030]
+# pl.plot(flare.flux)
+# pl.show()
+
+model = sub_flare_model(flare)
+pl.plot(model.flatten())
 pl.show()
-flare.flux -= sav_gol_model
-flare = remove_flares(flare)
-pl.plot(flare.time, flare.flux)
+pl.clf()
+count = flare.nflares
+
+for it,flux in enumerate(flare.detflares):
+    pl.plot(flare.params[it,0], flux, marker='x', markersize=4, color="black")
+    pl.plot(flux)
+pl.plot(flare.time,flare.flux)
 pl.show()
-flare.flux += sav_gol_model
-pl.plot(flare.time, flare.flux)
-pl.show()
+
+for i, flux in enumerate(flare.flux):
+    if flux == flare.detflares[i]:
+        if ((i-300) > 0) and (i+300 < len(flare.flux)):
+            pl.plot(flare.flux[i-300:i+300])
+            pl.show()
+            pl.clf()
+
+
+# flare = remove_flares(flare)
+# pl.plot(flare.time, flare.flux, label='Rotation and flare subbed flux')
+# pl.xlabel("BJD")
+# pl.ylabel("Relative Flux")
+# pl.legend(loc='best')
+# pl.show()
+
+
+
 
 
 

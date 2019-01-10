@@ -11,6 +11,7 @@ from scipy.signal import savgol_filter as sf
 from scipy.optimize import minimize
 from numpy import asarray
 import emcee
+import corner
 
 class Flare:
     flux = []
@@ -74,8 +75,8 @@ def computegeorge (flux, time):
     y = flux
     x = time
 
-    kernel = kernels.CosineKernel(log_period=np.log(3), axes=0) + kernels.ExpSquaredKernel(metric=0.5)
-    gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
+    kernel = kernels.CosineKernel(log_period=np.log(3), axes=0) * kernels.ExpSquaredKernel(metric=0.5)
+    gp = george.GP(kernel, mean=np.mean(y))
     gp.compute(x, y)
     print('Bounds', gp.get_parameter_bounds())
     print(gp.log_prior())
@@ -88,7 +89,7 @@ def computegeorge (flux, time):
     print(res)
 
     '''Emcee sampling'''
-    nwalkers, ndim = 36, len(gp)
+    nwalkers, ndim = 100, len(gp)
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
 
     # Initialize the walkers.
@@ -99,7 +100,12 @@ def computegeorge (flux, time):
 
     print("Running production chain")
     sampler.run_mcmc(p0, 100)
-    print(sampler.flatchain[0][1])
+    samples = sampler.chain[:, 20:, :].reshape((-1, ndim))
+    fig = corner.corner(samples, labels=["$m$"],
+                        truths=[2.50])
+    fig.savefig("triangle.png")
+    fig.show()
+
 
     for i in range(ndim):
         pl.figure()
@@ -119,17 +125,21 @@ def computegeorge (flux, time):
     pl.show()
 
 
-
-    '''End emcee'''
+    #
+    # '''End emcee'''
 
     pred_mean, pred_var = gp.predict(y, x, return_var=True)
+    params = pl.gcf()
+    params.set_size_inches(12, 6)
 
-    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='Blue', alpha=0.15, hatch='/',
                     label='Predicted variance')
 
-    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
-    pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    #pl.ylim(-0.1, 0.5)
+    pl.plot(flare.time, pred_mean, color='Red', label='Predicted mean')
+    pl.plot(flare.time, flare.flux, color='Black', linestyle= '-.', alpha=0.4, label='30 minute cadence flux')
+    pl.ylabel("Relative Flux")
+    pl.xlabel("Barycentric Julian Date")
+    pl.ylim(-0.1, 0.7)
     pl.legend(loc='best')
     pl.show()
     pl.clf()
@@ -265,8 +275,8 @@ lc359 = wolf.to_lightcurve(aperture_mask=wolf.pipeline_mask)
 
 
 #flare = Flare(lc359, 0, len(lc359.flux))
-flare = Flare(lc359, 2100, 2500)
-
+flare = Flare(lc359, 0, 2000)
+#
 sav_gol_model = sf(flare.flux, 101, 3)
 flare.flux -= sav_gol_model
 flare = remove_flares(flare)

@@ -18,6 +18,7 @@ import pandas as pd
 from astropy.stats import LombScargle
 from wolf359.base_luminosity import base_lum as lum
 from wolf359.flareenergy import energy_calc
+from gatspy import periodic
 
 import scipy.ndimage.filters as gausFilter
 
@@ -224,8 +225,18 @@ class Process:
 
         model = sub_flare_model(flare)
 
-        pl.plot(flare.time, model.flatten(), 'k--', label = 'Flare model')
-        pl.plot(flare.time, flare.flux, alpha=0.5, label = 'Flattened Flux')
+        params = pl.gcf()
+        params.set_size_inches(12, 6)
+
+        pl.plot(flare.time, model.flatten(), 'b--', label = 'Appaloosa model')
+        pl.plot(flare.time, flare.flux, alpha=0.3, color='Black', label = 'Flattened Flux')
+        pl.xlabel('Barycentric Julian Date')
+        pl.ylabel('Flux')
+        pl.legend(loc='best')
+        pl.show()
+        pl.clf()
+
+        pl.plot(flare.time, model.flatten(), 'b--', label = 'Appaloosa model')
         pl.xlabel('Barycentric Julian Date')
         pl.ylabel('Flux')
         pl.legend(loc='best')
@@ -248,24 +259,57 @@ def wolf():
 
     y = file[:, 1]
     x = file[:, 0]
+    E_point = lum(12.840, 2.4, 4000)
+    print(E_point)
 
 
 
     y = y[np.logical_not(np.isnan(y))]
-    y = [p for p in y if p > 370000] # Lot of systematic errors below this threshold (should change for other LC's)
+    y = [p for p in y if p > 410000 and p < 1000000] # Lot of systematic errors below this threshold (should change for other LC's)
+    # y = np.array(y)
+    # y = pd.rolling_median(y, 30)
     x = x[:len(y)]
     flux = y
     time = x
-    pl.plot(flux)
+
+    flare = Flare(y, x, 0, len(y))
+    flare.flux = np.array(flare.flux)
+    smo1 = (flare.flux - pd.rolling_median(flare.flux, 100, center=True)) / np.median(flare.flux)
+    smo2 = pd.rolling_median(flare.flux - smo1, 2, center=True)
+    y = np.isfinite(smo2)
+    flare.flux = ((flare.flux[y] - smo1[y]) / np.median(flare.flux)) - 1
+    flare.time = flare.time[:len(flare.flux)]
+
+
+    # smoothedFilter = gausFilter.gaussian_filter1d(flux, 300)
+    # params = pl.gcf()
+    # params.set_size_inches(12, 6)
+    # pl.plot(time, flux, 'k', label = 'Rolling median adjusted flux')
+    # pl.plot(time, smoothedFilter, 'r', label = '1D Gaussian filter')
+    # pl.ylabel('Flux')
+    # pl.xlabel('Barycentric Julian Date')
+    # pl.legend(loc='best')
+    # pl.show()
+    # pl.clf()
+    # print(np.median(flux))
+    #
+    # flux = (flux - smoothedFilter) / np.median(flux)
+    params = pl.gcf()
+    params.set_size_inches(12, 6)
+    pl.plot(flare.time, flare.flux, 'k')
+    pl.ylabel('ΔF/F')
+    pl.ylim(top=1.6)
+    pl.xlabel('Barycentric Julian Date')
+    pl.legend(loc='upper right')
     pl.show()
+
 
     print("Creating model...")
 
     num_flares = 0
     duration = []
     for i in range(0, len(flux), 4000):
-        flare = Flare(flux, time, i, i + 4000)
-        smoothed2 = gausFilter.gaussian_filter1d(flare.flux, 120)
+        flare = Flare(flux, time, i, i + 2000)
         # pl.plot(flare.time, smoothed2, 'k--', label='1D Gaussian Filter')
         # pl.plot(flare.time, flare.flux, alpha = 0.5, label='Raw Flux')
         # pl.xlabel('Barycentric Julian Date')
@@ -273,7 +317,16 @@ def wolf():
         # pl.legend(loc='best')
         # pl.show()
         # pl.clf()
-        flare.flux = (flare.flux - smoothed2) / np.median(flare.flux)
+        #flare.flux = (flare.flux - smoothed2)
+        flare.flux = np.array(flare.flux)
+        smo1 = (flare.flux - pd.rolling_median(flare.flux, 100, center=True)) / np.median(flare.flux)
+        smo2 = pd.rolling_median(flare.flux - smo1, 2, center=True)
+        y = np.isfinite(smo2)
+        flare.flux = ((flare.flux[y] - smo1[y]) / np.median(flare.flux)) - 1
+        flare.time = flare.time[:len(flare.flux)]
+
+        pl.plot(flare.time, flare.flux)
+        pl.show()
 
         # pl.plot(flare.time, flare.flux, 'k', label='Flattened Flux')
         # pl.xlabel('Barycentric Julian Date')
@@ -311,7 +364,7 @@ def wolf():
     print(E_point)
     print(ddx)
 
-    pl.plot(ddx + E_point, ddy, 'o--', markersize=2, alpha=0.5)
+    pl.plot(ddx + E_point, ddy, 'o', color='Black', markersize=2, alpha=0.5)
     pl.yscale('log')
     #pl.ylim(1e-3, 1e3)
     pl.xlabel('log Flare Energy (erg)')

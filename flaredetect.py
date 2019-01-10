@@ -6,6 +6,7 @@ def flaredetectpeak(flux):
     listFlare = []
 
     baseval = np.std(flux) * 2
+    #print(baseval)
     noise = get_noise(flux, baseval)
 
     while j < len(flux)-1:
@@ -24,7 +25,7 @@ def flaredetectpeak(flux):
                         base = flux[h - 1]  # peak will be point before it rises
                         h -= 1
                     else:
-                        if temp - base > noise:
+                        if temp - base > noise * 3:
                             listFlare.append(peak)
                     j += 1
             else:
@@ -35,7 +36,7 @@ def flaredetectpeak(flux):
                     base = flux[h - 1] # peak will be point before it rises
                     h -= 1
                 else:
-                    if temp - base > noise:
+                    if temp - base > noise * 3:
                         listFlare.append(peak)
                 j += 1
         else:
@@ -81,15 +82,13 @@ def flaredetecttime(time, flux):
     j = 0
     listFlare = []
 
-    baseval = get_std(flux) # 2 sigma deviation
+    baseval = get_std(flux) * 2 # 2 sigma deviation
     noise = get_noise(flux, baseval)
     while j < len(flux)-1:
         if flux[j] > baseval:
-            peak = flux[j]
             firstval = flux[j]
             if (flux[j] - flux[j + 1]) < 0:
                 while j < len(flux) - 1 and flux[j] < flux[j + 1]:
-                    peak = flux[j + 1]
                     j += 1
                 else:
                     temp = flux[j]
@@ -99,7 +98,7 @@ def flaredetecttime(time, flux):
                         base = flux[h - 1]  # peak will be point before it rises
                         h -= 1
                     else:
-                        if temp - base > noise:
+                        if temp - base > noise * 3:
                             listFlare.append(time[j])
                     j += 1
             else:
@@ -110,7 +109,7 @@ def flaredetecttime(time, flux):
                     base = flux[h - 1] # peak will be point before it rises
                     h -= 1
                 else:
-                    if temp - base > noise:
+                    if temp - base > noise * 3:
                         listFlare.append(time[j])
                 j += 1
         else:
