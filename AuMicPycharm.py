@@ -19,6 +19,8 @@ from wolf359.flareenergy import energy_calc
 from astropy.stats import LombScargle
 from wolf359.base_luminosity import base_lum as lum
 from scipy.integrate import simps
+from astropy.modeling.blackbody import blackbody_lambda
+from astropy import units as u
 
 
 
@@ -136,28 +138,28 @@ def computegeorge(flux, time):
     pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
                     label='Predicted variance')
 
-    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
-    pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    pl.ylim(0.0, 1)
-    pl.ylabel("Relative Flux")
-    pl.xlabel("BJD")
-    pl.legend(loc='best')
-    pl.show()
-    pl.clf()
-
-    # pred_mean, pred_var = gp.predict(y, x, return_var=True)
-
-    pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
-                    label='Predicted variance')
-
-    pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
+    # pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
     # pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
-    pl.ylim(0.0, 1)
-    pl.ylabel("Relative Flux")
-    pl.xlabel("BJD")
-    pl.legend(loc='best')
-    pl.show()
-    pl.clf()
+    # pl.ylim(0.0, 1)
+    # pl.ylabel("Relative Flux")
+    # pl.xlabel("BJD")
+    # pl.legend(loc='best')
+    # pl.show()
+    # pl.clf()
+    #
+    # # pred_mean, pred_var = gp.predict(y, x, return_var=True)
+    #
+    # pl.fill_between(time, pred_mean - np.sqrt(pred_var), pred_mean + np.sqrt(pred_var), color='k', alpha=0.4,
+    #                 label='Predicted variance')
+    #
+    # pl.plot(flare.time, pred_mean, color='Blue', label='Predicted mean')
+    # # pl.plot(flare.time, flare.flux, alpha=0.6, label='Raw flux')
+    # pl.ylim(0.0, 1)
+    # pl.ylabel("Relative Flux")
+    # pl.xlabel("BJD")
+    # pl.legend(loc='best')
+    # pl.show()
+    # pl.clf()
 
     # x = np.linspace(max(x), 3120, 3095)
     # mu, var = gp.predict(flare.flux, x, return_var=True)
@@ -260,15 +262,13 @@ def running_sum(list, window):
 
 
 def planck(wav, T):
-    h = 6.626e-34
-    c = 3.0e+8
-    k = 1.38e-23
-    a = 2.0 * h * (c ** 2)
-    e = 2.71828
-    wav = wav * 10 ** -9
-    b = (h * c) / (wav * k * T)
-    intensity = (a / wav ** 5) / ((e ** b) - 1)
-    return intensity
+    h = 6.62 * 10**-27 # plancks constant, j/s
+    c = 3.00 * 10**10 # speed of light, cm/s
+    k = 1.38 * 10**-16 # boltzmanns constant
+    e_power  = (c*h)/(k*wav*T)
+    b_lambda = 2*(c**2)*h/(wav**5) * 1/((2.71828**e_power) - 1)
+    return b_lambda
+
 
 
 class Process:
@@ -306,6 +306,17 @@ tess_R = tess_function[:, 1]
 b_R_star = []
 b_R_flare = []
 test_function = []
+temp = 3742 # kelvin
+wav = wav/1e7
+
+
+solar_l = 3.8 * 10**33 # erg
+boltz = 5.67 * 10**-5
+pi_over_temp = (np.pi)/(boltz * (temp**4))
+prod_func = tess_R * planck(wav, temp)
+conv_integral = np.trapz(prod_func, wav)
+l_prime = solar_l * 0.0727 * (conv_integral) * pi_over_temp
+print(l_prime)
 
 # wavelengths = np.arange(1e-9, 3e-6, 1e-9)
 # intensity5000 = planck(wavelengths, 5000.)
@@ -315,67 +326,47 @@ test_function = []
 
 prod_star = []
 prod_flare = []
-pl.plot(wav, tess_R)
-pl.show()
+# pl.plot(wav, tess_R)
+# pl.show()
 planck_file_star = open("planck_response_aumic.txt", 'w')
 RB_product_star = open("RB_product.txt", 'w')
 
-for i in wav:  # calculate for the star luminosity, where 3742 is the effective temperature
-    s = planck(i, 3742)  # will return joules/s^-1/m^-2
-    f = planck(i, 9000)
-    b_R_star.append(s)  # B lambda for the star temp
-    b_R_flare.append(f)  # B lambda for the flare temp
-    planck_file_star.write(str(i) + " " + str(s))
-    planck_file_star.write("\n")
-    planck_file_star.flush()
-
-star_func = np.genfromtxt("planck_response_aumic.txt", dtype=float, usecols=(0, 1))
-
-integral_star = np.trapz(b_R_star * tess_R, wav) # b lambda * tess response over d lambda
-integral_flare = np.trapz(b_R_flare * tess_R, wav)
-print(integral_star)
+#integral_star = np.trapz(b_R_star * tess_R, wav) # b lambda * tess response over d lambda
+# integral_flare = np.trapz(b_R_flare * tess_R, wav)
+# print(integral_star)
 # print(b_R_star)
 # print(tess_R)
 # print(integral_star)
 
 
-# c_AAs = 3.10**17  # Speed of light in Angstrom/s
-#
-# I1 = simps(tess_R * star_func[:,1] * wav, wav)  # Numerator
-# I2 = simps(tess_R / wav, wav)  # Denominator
-# filt_int  = np.interp(lamS,lamF,filt)
-# fnu = I1 / I2 / c_AAs  # Average flux density
-# print(fnu)
-# mAB = -2.5 * np.log10(fnu) - 48.6  # AB magnitude
-# print("Mab??", mAB)
-# res = np.convolve(tess_R, b_R_star)
-# # int_res = np.trapz(res, np.arange(0,357,1))
-# pl.plot(res)
-# pl.show()
-# print("res:" , int_res)
-
-for i in enumerate(tess_R):
-    s = b_R_star[i[0]] * tess_R[i[0]]
-    f = b_R_flare[i[0]] * tess_R[i[0]]
-    # print("B lambda = ", b_R_star[i[0]])
-    # print("R lambda = ", tess_R[i[0]])
-    prod_star.append(s)  # product of the tess function and the planck function
-    prod_flare.append(f)
-    RB_product_star.write(str(i) + " " + str(s))
-    RB_product_star.write("\n")
-    RB_product_star.flush()
 
 # print(prod_star)
 # pl.plot(wav, prod_star)
 # pl.show()
 
-# print("Star W/m^2 " + str(integral_star))
-# pl.plot(wav, prod_star)
-# pl.show()
+wavelength = wav * 10 # convert to angstroms
+flux_lam = blackbody_lambda(wavelength, temp) # erg/Angstrom/cm^2
+radius = 0.763 * (6.957 * 10**8)
+radius = radius * 100
+conv_integral = np.trapz(flux_lam * tess_R, wavelength) # convolution integral over wavelength
+tot_lum = np.asarray(np.pi * radius**2 * conv_integral) # total lum in the tess bandpass
 
-radius = 0.763
-L_star = (np.pi * (radius**2)) * integral_star
-print("Luminosity of star in TESS bandpass = ", L_star)
+
+test_wav = np.arange(0, 40000, 1)
+test_lam = blackbody_lambda(test_wav, temp)
+pl.plot(test_wav, test_lam, color="Green")
+pl.show()
+#pl.plot(wavelength, tess_R, color='Red')
+pl.plot(wavelength,flux_lam * tess_R,  color='Black')
+pl.plot(wavelength, flux_lam, color='Blue')
+pl.xlabel("Wavelength, angstroms")
+pl.ylabel("erg/s")
+pl.show()
+
+
+# equation is pi * Radius_star^2 * integral(planck_function * response_function d(wavelength))
+
+
 
 # print(L_star)
 
@@ -393,7 +384,7 @@ flare = Flare(x, y, 0, len(y))
 pl.plot(flare.time, flare.flux)
 pl.show()
 frequency, power = LombScargle(flare.time, flare.flux, center_data=True).autopower()
-#pl.plot(frequency, power)
+pl.plot(frequency, power)
 period_days = 1/frequency
 period_hours = period_days * 24
 pl.plot(period_days, power, color='Black')
@@ -429,12 +420,6 @@ pl.clf()
 
 # get = Process()
 # ed = get.subtract_flares(flare)
-# L_flare = ed[0] * integral_flare
-# print((integral_star/integral_flare) * radius * np.pi * (L_flare/L_star) )
-
-boltz = 5.67 * 10 ** -8
-# print(boltz * 9000**4 * ((integral_star/integral_flare) * radius * np.pi * (L_flare/L_star)))
-
 
 
 file = np.genfromtxt("aumicflare_times.txt", dtype=float, usecols=(0, 1))
@@ -462,13 +447,13 @@ for n, i in enumerate(flare.time):
                 temp += 1
                 loc_mean.append(flare.flux[temp])
 
-            a_flare = np.trapz(flare.flux[n:temp], flare.time[n:temp] * 43200)
-            l_prime_flare = a_flare * integral_flare
-            l_flare_p.append(l_prime_flare)
-            delta_f = l_prime_flare / L_star
-            a_flare_t = (delta_f*np.pi*(radius**2)) * (integral_star/integral_flare)
-            a_flare_prime.append(a_flare_t)
-            final_l_flare.append(5.670367*10**-8 * 9000**4 * a_flare_t) # ergs
+            a_flare = np.trapz(flare.flux[n:temp], flare.time[n:temp] * 86400)
+            # l_prime_flare = a_flare * integral_flare
+            # l_flare_p.append(l_prime_flare)
+            # delta_f = l_prime_flare / L_star
+            # a_flare_t = (delta_f*np.pi*(radius**2)) * (integral_star/integral_flare)
+            # a_flare_prime.append(a_flare_t)
+            # final_l_flare.append(5.670367*10**-8 * 9000**4 * a_flare_t) # ergs
 
 
             ed.append(a_flare)  # 2 min cadence
@@ -498,7 +483,7 @@ print("Delta f/f =", delta_f)
 print("A_flare(t)", a_flare_prime)
 print("L_flare", final_l_flare)
 
-exptime = 2. / 24. / 27.882813608642
+exptime = 2. / 24. / 27.
 # print(flare.time[len(flare.time)-1] - flare.time[-1])
 
 totdur = float(len(flare.time)) * exptime
@@ -514,11 +499,9 @@ pl.ylabel('Cumulative Flares per Day')
 pl.show()
 pl.clf()
 
-E_point = np.log10(0.07274704 * (3.85*10**33)) # error of +-
+E_point = np.log10(l_prime)
 
 print("Rough energy calc", E_point)
-print("Error", 0.004377329 * (3.85*10**33))
-print(10**ddx)
 
 pl.plot(ddx + E_point, ddy, 'o', color='Black', markersize=2, alpha=0.5)
 pl.yscale('log')
@@ -533,27 +516,27 @@ print(ddx+E_point)
 pl.scatter(ddx + E_point, amp)
 pl.show()
 
-
-
-
-# a_flare = ed[0] *
-
-
-# g = computegeorge(flare.flux, flare.time)
-# pl.plot(flare.time, g, label='George model')
-# pl.show()
-
-# flare.flux -= g # or sav gol model
-
-# model = sub_flare_model(flare)
-# pl.plot(model.flatten())
-# pl.show()
-# count = flare.nflares
-# print(count)
-
-# flare = remove_flares(flare)
-# pl.plot(flare.time, flare.flux, label='Rotation and flare subbed flux')
-# pl.xlabel("BJD")
-# pl.ylabel("Relative Flux")
-# pl.legend(loc='best')
-# pl.show()
+#
+#
+#
+# # a_flare = ed[0] *
+#
+#
+# # g = computegeorge(flare.flux, flare.time)
+# # pl.plot(flare.time, g, label='George model')
+# # pl.show()
+#
+# # flare.flux -= g # or sav gol model
+#
+# # model = sub_flare_model(flare)
+# # pl.plot(model.flatten())
+# # pl.show()
+# # count = flare.nflares
+# # print(count)
+#
+# # flare = remove_flares(flare)
+# # pl.plot(flare.time, flare.flux, label='Rotation and flare subbed flux')
+# # pl.xlabel("BJD")
+# # pl.ylabel("Relative Flux")
+# # pl.legend(loc='best')
+# # pl.show()
