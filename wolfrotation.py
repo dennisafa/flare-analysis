@@ -3,15 +3,15 @@ from george import kernels
 import numpy as np
 from lightkurve import KeplerTargetPixelFile
 import matplotlib.pyplot as pl
-import wolf359.aflare as ap
-import wolf359.flaredetect as fd
+import aflare as ap
+import flaredetect as fd
 import pandas as pd
 from astropy.io import fits
 from scipy.signal import savgol_filter as sf
 from scipy.optimize import minimize
 from numpy import asarray
-import emcee
-import corner
+# import emcee
+# import corner
 
 class Flare:
     flux = []

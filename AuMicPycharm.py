@@ -1,26 +1,16 @@
-import numpy as np
-import matplotlib.pyplot as pl
-from astropy.io import fits
 import george
 from george import kernels
 import numpy as np
-from lightkurve import KeplerTargetPixelFile
 import matplotlib.pyplot as pl
-import wolf359.aflare as ap
-import wolf359.flaredetect as fd
+import aflare as ap
+import flaredetect as fd
 import pandas as pd
 from astropy.io import fits
 from scipy.signal import savgol_filter as sf
-from scipy.optimize import minimize
 from numpy import asarray
-import emcee
-import scipy.ndimage.filters as gausFilter
-from wolf359.flareenergy import energy_calc
+from flareenergy import energy_calc
 from astropy.stats import LombScargle
-from wolf359.base_luminosity import base_lum as lum
-from scipy.integrate import simps
 from astropy.modeling.blackbody import blackbody_lambda
-from astropy import units as u
 
 
 
@@ -370,7 +360,7 @@ pl.show()
 
 # print(L_star)
 
-fits_file = fits.open('/Users/Dennis/Desktop/AuMicB/tess2018206045859-s0001-0000000441420236-0120-s_lc.fits')
+fits_file = fits.open('/Users/dennisafa/nasa/tess/tess2018206045859-s0001-0000000441420236-0120-s_lc.fits')
 
 y = fits_file[1].data.field("PDCSAP_FLUX")[:]
 x = fits_file[1].data.field("TIME")[:]
@@ -460,7 +450,7 @@ for n, i in enumerate(flare.time):
             # print(ed)
 
             local = np.sum(loc_mean) / len(flare.flux[n:temp])
-            loc_mean.clear()
+            # loc_mean.clear()
             # print("Flare amp =", (peak - local) / local)
             amp.append(peak)
 
@@ -503,7 +493,8 @@ E_point = np.log10(l_prime)
 
 print("Rough energy calc", E_point)
 
-pl.plot(ddx + E_point, ddy, 'o', color='Black', markersize=2, alpha=0.5)
+pl.plot(ddx + E_point, ddy, 'o', color='Black', markersize=3, alpha=0.7)
+pl.title("Au Mic Flare Frequency Distribution")
 pl.yscale('log')
 #pl.ylim(1e-20, 1e3)
 pl.xlabel('log Flare Energy (erg)')
